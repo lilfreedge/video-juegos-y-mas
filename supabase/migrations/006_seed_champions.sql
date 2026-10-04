@@ -188,11 +188,10 @@ from tournaments t, (values
   ('Nancy','France','#D81A1A','#FFFFFF',1,0,'2016',null),
   ('Strasbourg','France','#0066B3','#FFFFFF',1,0,'2017',null),
   ('Reims','France','#D81A1A','#FFFFFF',1,0,'2018',null),
-  ('Lorient','France','#F58220','#000000',1,0,'2020',null),
+  ('Lorient','France','#F58220','#000000',2,0,'2020, 2025',null),
   ('Toulouse','France','#5A28A0','#FFFFFF',1,0,'2022',null),
   ('Le Havre','France','#003F87','#FFFFFF',1,0,'2023',null),
-  ('AJ Auxerre','France','#001E62','#FFFFFF',1,0,'2024',null),
-  ('Lorient','France','#F58220','#000000',1,0,'2025',null)
+  ('AJ Auxerre','France','#001E62','#FFFFFF',1,0,'2024',null)
 ) as v(team_name,team_country,team_color,team_text_color,wins,runners_up,years_won,years_runner_up)
 where t.name = 'Ligue 2'
 on conflict (tournament_id, team_name) do update set
@@ -271,7 +270,7 @@ from tournaments t, (values
   ('Fortuna Dusseldorf','Germany','#E52129','#FFFFFF',2,2,'2012, 2018','1989, 1995'),
   ('St. Pauli','Germany','#4F2A24','#FFFFFF',1,2,'2024','2010, 2011'),
   ('Darmstadt','Germany','#005CA9','#FFFFFF',1,1,'2023','2015'),
-  ('Werder Bremen','Germany','#1D9053','#FFFFFF',1,0,'2022',null),
+  ('Werder Bremen','Germany','#1D9053','#FFFFFF',0,1,null,'2022'),
   ('Schalke 04','Germany','#004D9D','#FFFFFF',1,0,'2022',null),
   ('Jahn Regensburg','Germany','#F58220','#FFFFFF',1,0,'2003',null)
 ) as v(team_name,team_country,team_color,team_text_color,wins,runners_up,years_won,years_runner_up)
@@ -290,14 +289,12 @@ from tournaments t, (values
   ('Karlsruher SC','Germany','#003399','#FFFFFF',1,0,'2013',null),
   ('Heidenheim','Germany','#D52B1E','#FFFFFF',2,0,'2014, 2023',null),
   ('Arminia Bielefeld','Germany','#004A9E','#FFFFFF',1,0,'2015',null),
-  ('Dynamo Dresden','Germany','#F8D217','#000000',1,0,'2016',null),
+  ('Dynamo Dresden','Germany','#F8D217','#000000',3,0,'2016, 2021, 2025',null),
   ('MSV Duisburg','Germany','#004A9E','#FFFFFF',1,0,'2017',null),
   ('Magdeburg','Germany','#004A9E','#FFFFFF',1,1,'2018','2022'),
   ('Osnabruck','Germany','#5F2878','#FFFFFF',1,0,'2019',null),
   ('Bayern Munich II','Germany','#DC052D','#FFFFFF',1,0,'2020',null),
-  ('Dynamo Dresden','Germany','#F8D217','#000000',1,0,'2021',null),
-  ('Elversberg','Germany','#000000','#FFCC00',1,0,'2024',null),
-  ('Dynamo Dresden','Germany','#F8D217','#000000',1,0,'2025',null)
+  ('Elversberg','Germany','#000000','#FFCC00',1,0,'2024',null)
 ) as v(team_name,team_country,team_color,team_text_color,wins,runners_up,years_won,years_runner_up)
 where t.name = '3. Liga'
 on conflict (tournament_id, team_name) do update set
@@ -373,7 +370,7 @@ from tournaments t, (values
   ('Lecce','Italy','#F8D217','#D22630',4,0,'2010, 2022, 2024, 2025',null),
   ('Atalanta','Italy','#1664B7','#000000',1,0,'2011',null),
   ('Pescara','Italy','#004B87','#FFFFFF',1,0,'2012',null),
-  ('Sassuolo','Italy','#008057','#000000',1,0,'2013',null),
+  ('Sassuolo','Italy','#008057','#000000',2,0,'2013, 2025',null),
   ('Carpi','Italy','#8B0000','#FFFFFF',1,0,'2015',null),
   ('Cagliari','Italy','#D21034','#003F87',2,0,'2016, 2023',null),
   ('SPAL','Italy','#005BBB','#FFFFFF',1,0,'2017',null),
@@ -381,8 +378,7 @@ from tournaments t, (values
   ('Brescia','Italy','#1D59AF','#FFFFFF',1,0,'2019',null),
   ('Benevento','Italy','#F9DC00','#D21034',1,0,'2020',null),
   ('Frosinone','Italy','#F7D800','#003A6B',1,0,'2023',null),
-  ('Parma','Italy','#F7D800','#003A6B',1,0,'2024',null),
-  ('Sassuolo','Italy','#008057','#000000',1,0,'2025',null)
+  ('Parma','Italy','#F7D800','#003A6B',1,0,'2024',null)
 ) as v(team_name,team_country,team_color,team_text_color,wins,runners_up,years_won,years_runner_up)
 where t.name = 'Serie B'
 on conflict (tournament_id, team_name) do update set
@@ -460,13 +456,12 @@ from tournaments t, (values
   ('Sporting Gijon','Spain','#D20022','#FFFFFF',1,2,'1977','2008, 2015'),
   ('Real Zaragoza','Spain','#004899','#FFFFFF',1,2,'1978','1951, 1990'),
   ('Rayo Vallecano','Spain','#E30613','#FFFFFF',1,0,'2018',null),
-  ('Granada','Spain','#D21034','#FFFFFF',1,1,'2016','2019'),
+  ('Granada','Spain','#D21034','#FFFFFF',1,2,'2016','2019, 2023'),
   ('Mallorca','Spain','#CD1719','#FBD12A',1,1,'2019','2015'),
   ('Cadiz','Spain','#FFCB05','#003F7F',1,0,'2020',null),
   ('Espanyol','Spain','#005BBB','#FFCB05',1,0,'2021',null),
   ('Girona','Spain','#CD2534','#FFFFFF',0,1,null,'2022'),
   ('Almeria','Spain','#D30007','#FFFFFF',1,0,'2022',null),
-  ('Granada','Spain','#D21034','#FFFFFF',0,1,null,'2023'),
   ('Leganes','Spain','#002E62','#FFFFFF',1,0,'2024',null),
   ('Elche','Spain','#008857','#FFFFFF',1,0,'2025',null)
 ) as v(team_name,team_country,team_color,team_text_color,wins,runners_up,years_won,years_runner_up)
