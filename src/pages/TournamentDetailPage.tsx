@@ -44,6 +44,20 @@ export default function TournamentDetailPage() {
   }
   useEffect(() => { load(); }, [id]);
 
+  // Count chronological appearances per player (within this tournament's scorers)
+  // appearance[id] = 1 means first time, 2 = second, etc.
+  const scorerAppearance = useMemo(() => {
+    const sorted = [...scorers].sort((a, b) => a.year - b.year);
+    const seen: Record<string, number> = {};
+    const result: Record<string, number> = {};
+    for (const s of sorted) {
+      const key = s.player_name.toLowerCase().trim();
+      seen[key] = (seen[key] ?? 0) + 1;
+      result[s.id] = seen[key];
+    }
+    return result;
+  }, [scorers]);
+
   const availableYears = useMemo(() => Array.from(new Set(standings.map((s) => s.year_end))).sort((a, b) => b - a), [standings]);
   useEffect(() => { if (availableYears.length && !availableYears.includes(standingsYear)) setStandingsYear(availableYears[0]); }, [availableYears]);
   const standingsForYear = useMemo(() => standings.filter((s) => s.year_end === standingsYear).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)), [standings, standingsYear]);
@@ -234,7 +248,13 @@ export default function TournamentDetailPage() {
               <tbody>{scorers.length === 0 ? <tr><td colSpan={7} className="text-center text-slate-400 py-6">No data yet.</td></tr> : scorers.map((s, i) => (
                 <tr key={s.id} className="group border-t border-slate-200 dark:border-slate-800">
                   <td className="px-3 py-2 text-slate-400 font-mono">{i + 1}</td>
-                  <td className="px-3 py-2 font-medium">{s.player_name} {s.from_my_career && '⭐'}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {s.player_name}
+                    {scorerAppearance[s.id] > 1 && (
+                      <span className="ml-1 text-amber-600 font-bold" title={`${scorerAppearance[s.id]}a vez goleador`}>{'*'.repeat(scorerAppearance[s.id] - 1)}</span>
+                    )}
+                    {s.from_my_career && ' ⭐'}
+                  </td>
                   <td className="px-3 py-2 text-right font-semibold">{s.goals}</td>
                   <td className="px-3 py-2">{s.nationality ?? '—'}</td>
                   <td className="px-3 py-2 font-mono">{s.year - 1}-{String(s.year).slice(-2)}</td>
