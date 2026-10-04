@@ -101,7 +101,6 @@ export default function CareerPage() {
 
   // Split active + previous by club vs national
   const activeClub = active.find((c) => !c.is_national);
-  const activeNational = active.find((c) => c.is_national);
   const activeClubs = active.filter((c) => !c.is_national);
   const activeNationals = active.filter((c) => c.is_national);
   const previousClubs = previous.filter((c) => !c.is_national);
@@ -198,16 +197,6 @@ export default function CareerPage() {
         </div>
       )}
 
-      {activeNational && (
-        <div className="mb-6 flex items-center gap-3 rounded-lg p-3" style={{ background: activeNational.club_color ?? '#1e3a8a', color: activeNational.club_text_color ?? '#fff' }}>
-          <span className="text-2xl">🌐</span>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase opacity-80 tracking-wide">Selección activa</div>
-            <div className="text-lg font-bold truncate">{activeNational.club_name}</div>
-          </div>
-          <Link to={`/career/contract/${activeNational.id}`} className="text-xs bg-black/20 hover:bg-black/40 rounded px-3 py-1">Ver</Link>
-        </div>
-      )}
 
       {/* Trophy showcase */}
       {trophyList.length > 0 && (
@@ -223,28 +212,59 @@ export default function CareerPage() {
         </section>
       )}
 
-      {/* Clubs timeline */}
-      {activeClubs.length > 0 && (
-        <section className="mb-6">
-          <div className="text-xs uppercase font-semibold text-emerald-700 mb-2">🟢 Clubes activos</div>
-          <div className="grid gap-2">{activeClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
-        </section>
-      )}
-      {previousClubs.length > 0 && (
-        <section className="mb-6">
-          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">📁 Clubes anteriores</div>
-          <div className="grid gap-2">{previousClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
-        </section>
-      )}
-      {/* National team history */}
-      {(activeNationals.length > 0 || previousNationals.length > 0) && (
-        <section className="mb-6">
-          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">🌐 Selecciones</div>
-          <div className="grid gap-2">{[...activeNationals, ...previousNationals].map((c) => <ContractCard key={c.id} c={c} />)}</div>
-        </section>
-      )}
+      {/* Two-column layout: Clubs | Selecciones */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* CLUBES column */}
+        <div>
+          <div className="text-sm font-bold text-slate-800 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 pb-2 mb-3 flex items-center gap-2">
+            <span className="text-lg">⚽</span>
+            <span>Clubes</span>
+            <span className="text-xs text-slate-400 font-normal ml-auto">{contracts.filter((c) => !c.is_national).length}</span>
+          </div>
+          {activeClubs.length > 0 && (
+            <div className="mb-5">
+              <div className="text-[10px] uppercase font-semibold text-emerald-700 mb-2 flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Activos</div>
+              <div className="grid gap-2">{activeClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+            </div>
+          )}
+          {previousClubs.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 mb-2">Anteriores</div>
+              <div className="grid gap-2">{previousClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+            </div>
+          )}
+          {activeClubs.length === 0 && previousClubs.length === 0 && (
+            <div className="text-slate-400 text-sm border border-dashed border-slate-300 dark:border-slate-700 rounded p-6 text-center">Sin clubes aún</div>
+          )}
+        </div>
+
+        {/* SELECCIONES column */}
+        <div>
+          <div className="text-sm font-bold text-slate-800 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 pb-2 mb-3 flex items-center gap-2">
+            <span className="text-lg">🌐</span>
+            <span>Selecciones</span>
+            <span className="text-xs text-slate-400 font-normal ml-auto">{contracts.filter((c) => c.is_national).length}</span>
+          </div>
+          {activeNationals.length > 0 && (
+            <div className="mb-5">
+              <div className="text-[10px] uppercase font-semibold text-emerald-700 mb-2 flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Activas</div>
+              <div className="grid gap-2">{activeNationals.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+            </div>
+          )}
+          {previousNationals.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 mb-2">Anteriores</div>
+              <div className="grid gap-2">{previousNationals.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+            </div>
+          )}
+          {activeNationals.length === 0 && previousNationals.length === 0 && (
+            <div className="text-slate-400 text-sm border border-dashed border-slate-300 dark:border-slate-700 rounded p-6 text-center">Sin selecciones aún</div>
+          )}
+        </div>
+      </div>
+
       {contracts.length === 0 && (
-        <div className="text-slate-500 border border-dashed border-slate-300 rounded p-10 text-center">No tienes contracts aún. Click + Nuevo contract para empezar.</div>
+        <div className="mt-6 text-slate-500 border border-dashed border-slate-300 rounded p-10 text-center">No tienes contracts aún. Click + Nuevo contract para empezar.</div>
       )}
     </div>
   );

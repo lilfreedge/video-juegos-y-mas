@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 import StandingsImport from '../components/StandingsImport';
 
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 interface Tournament { id: string; name: string; country: string | null; logo_url: string | null; has_top_scorer: boolean; color: string | null; text_color: string | null; }
 interface Champion { id: string; tournament_id: string; team_name: string; team_country: string | null; team_color: string | null; team_text_color: string | null; wins: number; runners_up: number; years_won: string | null; years_runner_up: string | null; from_my_career: boolean; }
 interface Scorer { id: string; tournament_id: string; year: number; player_name: string; nationality: string | null; team: string | null; goals: number; from_my_career: boolean; }
@@ -251,7 +257,7 @@ export default function TournamentDetailPage() {
                   <td className="px-3 py-2 font-medium">
                     {s.player_name}
                     {scorerAppearance[s.id] > 1 && (
-                      <span className="ml-1 text-amber-600 font-bold" title={`${scorerAppearance[s.id]}a vez goleador`}>{'*'.repeat(scorerAppearance[s.id] - 1)}</span>
+                      <span className="ml-1 text-amber-600 text-xs font-semibold">({ordinal(scorerAppearance[s.id])} time)</span>
                     )}
                     {s.from_my_career && ' ⭐'}
                   </td>
