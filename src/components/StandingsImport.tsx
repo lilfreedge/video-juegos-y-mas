@@ -45,6 +45,37 @@ export default function StandingsImport({ tournamentId, yearEnd, catalog, initia
     }
   }
 
+  // Append year to a champion's years_won / years_runner_up, or insert new row
+  async function upsertChampion(teamName: string, kind: 'won' | 'runner_up') {
+    const yearStr = String(yearEnd);
+    const { data: existing } = await supabase.from('champions')
+      .select('id, wins, runners_up, years_won, years_runner_up')
+      .eq('tournament_id', tournamentId)
+      .eq('team_name', teamName)
+      .maybeSingle();
+    if (existing) {
+      const col = kind === 'won' ? 'years_won' : 'years_runner_up';
+      const countCol = kind === 'won' ? 'wins' : 'runners_up';
+      const current = (existing as any)[col] as string | null;
+      if (!current || !new RegExp(`\\b${yearStr}\\b`).test(current)) {
+        const next = current ? `${current}, ${yearStr}` : yearStr;
+        await supabase.from('champions').update({
+          [col]: next,
+          [countCol]: ((existing as any)[countCol] ?? 0) + 1,
+        }).eq('id', existing.id);
+      }
+    } else {
+      await supabase.from('champions').insert({
+        tournament_id: tournamentId,
+        team_name: teamName,
+        wins: kind === 'won' ? 1 : 0,
+        runners_up: kind === 'won' ? 0 : 1,
+        years_won: kind === 'won' ? yearStr : null,
+        years_runner_up: kind === 'runner_up' ? yearStr : null,
+      });
+    }
+  }
+
   async function save() {
     if (!rows.length) { setError('No rows to save'); return; }
     setSaving(true); setError(null);
@@ -58,6 +89,13 @@ export default function StandingsImport({ tournamentId, yearEnd, catalog, initia
       await supabase.from('standings').delete().eq('tournament_id', tournamentId).eq('year_end', yearEnd);
       const { error } = await supabase.from('standings').insert(payload);
       if (error) throw error;
+
+      // Auto-mirror: position 1 → champion, position 2 → runner-up (in champions table)
+      const winner = rows.find((r) => r.position === 1 && r.team);
+      const runnerUp = rows.find((r) => r.position === 2 && r.team);
+      if (winner) await upsertChampion(winner.team, 'won');
+      if (runnerUp) await upsertChampion(runnerUp.team, 'runner_up');
+
       onSaved(); onClose();
     } catch (e: any) {
       setError(e.message || 'Save failed');

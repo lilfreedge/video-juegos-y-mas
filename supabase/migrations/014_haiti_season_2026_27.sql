@@ -118,6 +118,27 @@ on conflict (tournament_id, team_name) do update set
                          when champions.years_runner_up !~ '\m2027\M' then champions.years_runner_up || ', 2027'
                          else champions.years_runner_up end;
 
+-- LIGUE 1 2026-27: Stade Rennais ganó (pos 1), PSG runner-up (pos 2) — derivado de standings
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'Stade Rennais', 'France', '#E30613', '#000000', 1, 0, '2027', null
+from tournaments t where t.name = 'Ligue 1'
+on conflict (tournament_id, team_name) do update set
+  wins = case when champions.years_won is null or champions.years_won !~ '\m2027\M'
+              then champions.wins + 1 else champions.wins end,
+  years_won = case when champions.years_won is null then '2027'
+                   when champions.years_won !~ '\m2027\M' then champions.years_won || ', 2027'
+                   else champions.years_won end;
+
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'Paris Saint-Germain', 'France', '#004170', '#ED1C24', 0, 1, null, '2027'
+from tournaments t where t.name = 'Ligue 1'
+on conflict (tournament_id, team_name) do update set
+  runners_up = case when champions.years_runner_up is null or champions.years_runner_up !~ '\m2027\M'
+                   then champions.runners_up + 1 else champions.runners_up end,
+  years_runner_up = case when champions.years_runner_up is null then '2027'
+                         when champions.years_runner_up !~ '\m2027\M' then champions.years_runner_up || ', 2027'
+                         else champions.years_runner_up end;
+
 -- UEFA SUPER CUP Aug 2026 (year 2026): PSG beat Aston Villa
 insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
 select t.id, 'Paris Saint-Germain', 'France', '#004170', '#ED1C24', 1, 0, '2026', null
