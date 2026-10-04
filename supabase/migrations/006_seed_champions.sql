@@ -36,11 +36,10 @@ from tournaments t, (values
   ('Burnley','England','#6C1D45','#99D6EA',2,0,'2015-16, 2022-23',null),
   ('Sunderland','England','#EB172B','#FFFFFF',1,0,'2004-05',null),
   ('West Brom','England','#122F67','#FFFFFF',1,0,'2007-08',null),
-  ('Wolverhampton','England','#FDB913','#231F20',1,0,'2008-09',null),
+  ('Wolves','England','#FDB913','#231F20',2,0,'2008-09, 2017-18',null),
   ('QPR','England','#1D5BA4','#FFFFFF',1,0,'2010-11',null),
   ('Cardiff City','Wales','#0070B5','#FFFFFF',1,0,'2012-13',null),
   ('Bournemouth','England','#DA291C','#000000',1,0,'2014-15',null),
-  ('Wolves','England','#FDB913','#231F20',1,0,'2017-18',null),
   ('Norwich City','England','#00A650','#FFF200',1,1,'2018-19, 2020-21',null),
   ('Fulham','England','#FFFFFF','#000000',1,0,'2021-22',null),
   ('Leeds United','England','#FFCD00','#1D4189',1,0,'2019-20',null)
@@ -126,7 +125,7 @@ from tournaments t, (values
   ('Arsenal','England','#EF0107','#FFFFFF',2,6,'1987, 1993','1968, 1969, 1988, 2007, 2011, 2018'),
   ('Birmingham City','England','#1D5BA4','#FFFFFF',2,2,'1963, 2011','2001, 2024'),
   ('Leicester City','England','#003090','#FDBE11',3,2,'1964, 1997, 2000','1965, 1999'),
-  ('Wolverhampton','England','#FDB913','#231F20',2,2,'1974, 1980','1981, 1983'),
+  ('Wolves','England','#FDB913','#231F20',2,2,'1974, 1980','1981, 1983'),
   ('Swansea City','Wales','#FFFFFF','#000000',1,0,'2013',null),
   ('Newcastle','England','#241F20','#FFFFFF',0,3,null,'1976, 2023, 2025')
 ) as v(team_name,team_country,team_color,team_text_color,wins,runners_up,years_won,years_runner_up)
@@ -574,12 +573,11 @@ from tournaments t, (values
   ('Manchester United','England','#DA291C','#FBE122',1,1,'2017','2021'),
   ('Atalanta','Italy','#1664B7','#000000',1,0,'2024',null),
   ('Borussia Dortmund','Germany','#FDE100','#000000',0,1,null,'2002'),
-  ('Marseille','France','#27B2CB','#FFFFFF',0,2,null,'1999, 2004'),
+  ('Marseille','France','#27B2CB','#FFFFFF',0,3,null,'1999, 2004, 2018'),
   ('Werder Bremen','Germany','#1D9053','#FFFFFF',0,1,null,'2009'),
   ('Fulham','England','#FFFFFF','#000000',0,1,null,'2010'),
   ('Benfica','Portugal','#E30613','#FFFFFF',0,2,null,'2013, 2014'),
   ('Dnipro','Ukraine','#005BBB','#FFCB05',0,1,null,'2015'),
-  ('Olympique de Marseille','France','#27B2CB','#FFFFFF',0,1,null,'2018'),
   ('Arsenal','England','#EF0107','#FFFFFF',0,1,null,'2019'),
   ('Roma','Italy','#8E1B1F','#F3C04C',0,1,null,'2023'),
   ('Bayer Leverkusen','Germany','#E32221','#000000',0,1,null,'2024')

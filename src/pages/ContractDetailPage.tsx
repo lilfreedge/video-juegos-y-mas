@@ -13,7 +13,6 @@ export default function ContractDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [label, setLabel] = useState('');
-  const [startYear, setStartYear] = useState<number>(new Date().getFullYear());
 
   async function load() {
     if (!id) return;
@@ -23,15 +22,24 @@ export default function ContractDetailPage() {
       supabase.from('seasons').select('*').eq('contract_id', id).order('start_year', { ascending: true }),
     ]);
     setC(cd as Contract | null); setSeasons((sd ?? []) as Season[]);
-    // Auto-suggest next season label
-    if (sd && sd.length) { const last = sd[sd.length - 1]; const y = last.end_year; setStartYear(y); setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`); }
-    else if (cd) { const y = (cd as Contract).start_year; setStartYear(y); setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`); }
+    // Auto-suggest next season label from last season or contract start
+    if (sd && sd.length) { const y = sd[sd.length - 1].end_year; setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`); }
+    else if (cd) { const y = (cd as Contract).start_year; setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`); }
     setLoading(false);
   }
   useEffect(() => { load(); }, [id]);
 
+  // Parse "Season YYYY-YY" or "YYYY-YY" or "YYYY-YYYY" → start year
+  function parseStartYear(lbl: string): number | null {
+    const m = lbl.match(/(\d{4})\s*-\s*(\d{2,4})/);
+    if (!m) return null;
+    return Number(m[1]);
+  }
+
   async function addSeason() {
     if (!id || !label.trim()) return;
+    const startYear = parseStartYear(label);
+    if (!startYear) { alert('Label must include a year like "2026-27" or "Season 2026-27"'); return; }
     const { error } = await supabase.from('seasons').insert({ contract_id: id, label: label.trim(), start_year: startYear, end_year: startYear + 1 });
     if (error) { alert(error.message); return; }
     setShowAdd(false); load();
@@ -68,10 +76,9 @@ export default function ContractDetailPage() {
         <button onClick={() => setShowAdd((v) => !v)} className="bg-emerald-600 text-white rounded px-3 py-1 text-sm">+ New season</button>
       </div>
       {showAdd && (
-        <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded p-3 mb-3 grid gap-2 sm:grid-cols-3">
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Season 2026-27)" className="sm:col-span-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <input type="number" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} placeholder="Start year" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <div className="sm:col-span-3 flex justify-end gap-2"><button onClick={() => setShowAdd(false)} className="text-sm text-slate-500 px-3">Cancel</button><button onClick={addSeason} className="bg-emerald-600 text-white rounded px-3 py-1 text-sm">Save</button></div>
+        <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded p-3 mb-3">
+          <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Season 2026-27" className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
+          <div className="flex justify-end gap-2 mt-2"><button onClick={() => setShowAdd(false)} className="text-sm text-slate-500 px-3">Cancel</button><button onClick={addSeason} className="bg-emerald-600 text-white rounded px-3 py-1 text-sm">Save</button></div>
         </div>
       )}
       {seasons.length === 0 ? (

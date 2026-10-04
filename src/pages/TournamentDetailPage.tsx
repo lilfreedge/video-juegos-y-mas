@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
+import StandingsImport from '../components/StandingsImport';
 
 interface Tournament { id: string; name: string; country: string | null; logo_url: string | null; has_top_scorer: boolean; color: string | null; text_color: string | null; }
 interface Champion { id: string; tournament_id: string; team_name: string; team_country: string | null; team_color: string | null; team_text_color: string | null; wins: number; runners_up: number; years_won: string | null; years_runner_up: string | null; from_my_career: boolean; }
 interface Scorer { id: string; tournament_id: string; year: number; player_name: string; nationality: string | null; team: string | null; goals: number; from_my_career: boolean; }
+interface Standing { id: string; tournament_id: string; year_end: number; team_name: string; position: number | null; played: number | null; wins: number | null; draws: number | null; losses: number | null; goals_for: number | null; goals_against: number | null; points: number | null; }
 
 export default function TournamentDetailPage() {
   const { id } = useParams();
   const [t, setT] = useState<Tournament | null>(null);
   const [champs, setChamps] = useState<Champion[]>([]);
   const [scorers, setScorers] = useState<Scorer[]>([]);
+  const [standings, setStandings] = useState<Standing[]>([]);
+  const [catalog, setCatalog] = useState<string[]>([]);
+  const [standingsYear, setStandingsYear] = useState<number>(new Date().getFullYear() + 1);
+  const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingC, setEditingC] = useState<string | null>(null); // id or 'new'
   const [editingS, setEditingS] = useState<string | null>(null);
@@ -21,14 +27,31 @@ export default function TournamentDetailPage() {
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [{ data: td }, { data: cd }, { data: sd }] = await Promise.all([
+    const [{ data: td }, { data: cd }, { data: sd }, { data: std }, { data: cat }] = await Promise.all([
       supabase.from('tournaments').select('*').eq('id', id).maybeSingle(),
       supabase.from('champions').select('*').eq('tournament_id', id).order('wins', { ascending: false }),
       supabase.from('top_scorers').select('*').eq('tournament_id', id).order('goals', { ascending: false }),
+      supabase.from('standings').select('*').eq('tournament_id', id).order('year_end', { ascending: false }).order('position', { ascending: true }),
+      supabase.from('clubs_catalog').select('name').order('name'),
     ]);
-    setT(td as Tournament | null); setChamps((cd ?? []) as Champion[]); setScorers((sd ?? []) as Scorer[]); setLoading(false);
+    setT(td as Tournament | null);
+    setChamps((cd ?? []) as Champion[]);
+    setScorers((sd ?? []) as Scorer[]);
+    setStandings((std ?? []) as Standing[]);
+    setCatalog(((cat ?? []) as { name: string }[]).map((c) => c.name));
+    setLoading(false);
   }
   useEffect(() => { load(); }, [id]);
+
+  const availableYears = useMemo(() => Array.from(new Set(standings.map((s) => s.year_end))).sort((a, b) => b - a), [standings]);
+  useEffect(() => { if (availableYears.length && !availableYears.includes(standingsYear)) setStandingsYear(availableYears[0]); }, [availableYears]);
+  const standingsForYear = useMemo(() => standings.filter((s) => s.year_end === standingsYear).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)), [standings, standingsYear]);
+
+  async function delStandings() {
+    if (!id || !confirm(`Borrar standings de ${standingsYear - 1}-${String(standingsYear).slice(-2)}?`)) return;
+    await supabase.from('standings').delete().eq('tournament_id', id).eq('year_end', standingsYear);
+    load();
+  }
 
   function openNewChamp() { setCForm({ team_color: '#1e3a8a', team_text_color: '#ffffff', wins: 0, runners_up: 0 }); setEditingC('new'); }
   function openEditChamp(c: Champion) { setCForm({ ...c }); setEditingC(c.id); }
@@ -118,6 +141,61 @@ export default function TournamentDetailPage() {
           </table>
         </div>
       </section>
+
+      {/* Standings */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <div className="text-xs uppercase font-semibold text-slate-500">📊 Standings por temporada</div>
+          <div className="flex items-center gap-2">
+            {availableYears.length > 0 && (
+              <select value={standingsYear} onChange={(e) => setStandingsYear(Number(e.target.value))} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs">
+                {availableYears.map((y) => <option key={y} value={y}>{y - 1}-{String(y).slice(-2)}</option>)}
+              </select>
+            )}
+            <input type="number" value={standingsYear} onChange={(e) => setStandingsYear(Number(e.target.value))} placeholder="Año fin" className="w-24 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs" title="Año fin de temporada (ej: 2027 para 2026-27)" />
+            <button onClick={() => setShowImport(true)} className="text-xs bg-emerald-600 text-white rounded px-3 py-1">📷 Subir foto</button>
+            {standingsForYear.length > 0 && <button onClick={delStandings} className="text-xs text-slate-400 hover:text-red-500 px-2">🗑</button>}
+          </div>
+        </div>
+        {standingsForYear.length === 0 ? (
+          <div className="border border-dashed border-slate-300 dark:border-slate-700 rounded p-6 text-center text-sm text-slate-500">
+            No hay tabla para {standingsYear - 1}-{String(standingsYear).slice(-2)}. Sube una foto o captura la de tu juego.
+          </div>
+        ) : (
+          <div className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden bg-white dark:bg-slate-900 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th className="w-10 px-3 py-2">#</th>
+                  <th className="text-left px-3 py-2">Equipo</th>
+                  <th className="text-center px-2 w-10">PJ</th>
+                  <th className="text-center px-2 w-10">G</th>
+                  <th className="text-center px-2 w-10">E</th>
+                  <th className="text-center px-2 w-10">P</th>
+                  <th className="text-center px-2 w-10">GF</th>
+                  <th className="text-center px-2 w-10">GC</th>
+                  <th className="text-right px-3 py-2 w-14">Pts</th>
+                </tr>
+              </thead>
+              <tbody>{standingsForYear.map((r) => (
+                <tr key={r.id} className={`border-t border-slate-100 dark:border-slate-800 ${r.position === 1 ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                  <td className="px-3 py-1.5 font-mono text-slate-500">{r.position ?? ''}</td>
+                  <td className="px-3 py-1.5 font-medium">{r.team_name}{r.position === 1 && <span className="ml-2 text-amber-600 text-xs font-bold">🏆</span>}</td>
+                  <td className="px-2 text-center">{r.played ?? '—'}</td>
+                  <td className="px-2 text-center">{r.wins ?? '—'}</td>
+                  <td className="px-2 text-center">{r.draws ?? '—'}</td>
+                  <td className="px-2 text-center">{r.losses ?? '—'}</td>
+                  <td className="px-2 text-center">{r.goals_for ?? '—'}</td>
+                  <td className="px-2 text-center">{r.goals_against ?? '—'}</td>
+                  <td className="px-3 py-1.5 text-right font-bold">{r.points ?? '—'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {showImport && id && <StandingsImport tournamentId={id} yearEnd={standingsYear} catalog={catalog} onClose={() => setShowImport(false)} onSaved={load} />}
 
       {t.has_top_scorer && (
         <section>
