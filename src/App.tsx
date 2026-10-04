@@ -3,6 +3,8 @@ import HomePage from './pages/HomePage';
 import TournamentsPage from './pages/TournamentsPage';
 import TournamentDetailPage from './pages/TournamentDetailPage';
 import CareerPage from './pages/CareerPage';
+import ContractDetailPage from './pages/ContractDetailPage';
+import SeasonDetailPage from './pages/SeasonDetailPage';
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
             <Route path="/tournaments" element={<TournamentsPage />} />
             <Route path="/tournament/:id" element={<TournamentDetailPage />} />
             <Route path="/career" element={<CareerPage />} />
+            <Route path="/career/contract/:id" element={<ContractDetailPage />} />
+            <Route path="/career/season/:id" element={<SeasonDetailPage />} />
           </Routes>
         </main>
       </div>
