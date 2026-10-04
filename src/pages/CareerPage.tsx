@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
@@ -6,6 +6,7 @@ import Loading from '../components/Loading';
 interface Contract { id: string; club_name: string; club_country: string | null; club_color: string | null; club_text_color: string | null; club_logo_url: string | null; start_year: number; start_month: number | null; end_year: number | null; end_month: number | null; }
 interface Season { id: string; contract_id: string; label: string; start_year: number; end_year: number; }
 interface Trophy { id: string; season_id: string; tournament_name_snapshot: string; result: string; }
+interface Club { id: string; name: string; country: string; primary_color: string; text_color: string; }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -26,37 +27,55 @@ export default function CareerPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
+  const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [f, setF] = useState<Partial<Contract>>({ start_year: new Date().getFullYear(), start_month: new Date().getMonth() + 1, club_color: '#1e3a8a', club_text_color: '#ffffff' });
+  const [selectedClub, setSelectedClub] = useState<Club | null>(null);
+  const [startMonth, setStartMonth] = useState<number | ''>(new Date().getMonth() + 1);
+  const [startYear, setStartYear] = useState<number>(new Date().getFullYear());
+  const [endMonth, setEndMonth] = useState<number | ''>('');
+  const [endYear, setEndYear] = useState<number | ''>('');
 
   async function load() {
     setLoading(true);
-    const [{ data: cs }, { data: ss }, { data: ts }] = await Promise.all([
+    const [{ data: cs }, { data: ss }, { data: ts }, { data: cat }] = await Promise.all([
       supabase.from('contracts').select('*').order('start_year', { ascending: false }).order('start_month', { ascending: false }),
       supabase.from('seasons').select('*'),
       supabase.from('trophies_won').select('*'),
+      supabase.from('clubs_catalog').select('*').order('name'),
     ]);
     setContracts((cs ?? []) as Contract[]);
     setSeasons((ss ?? []) as Season[]);
     setTrophies((ts ?? []) as Trophy[]);
+    setClubs((cat ?? []) as Club[]);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
 
+  function resetForm() {
+    setSelectedClub(null);
+    setStartMonth(new Date().getMonth() + 1);
+    setStartYear(new Date().getFullYear());
+    setEndMonth('');
+    setEndYear('');
+  }
+
   async function saveContract() {
-    if (!f.club_name?.trim() || !f.start_year) return;
+    if (!selectedClub) { alert('Pick a club first'); return; }
     const payload: any = {
-      club_name: f.club_name.trim(), club_country: f.club_country || null,
-      club_color: f.club_color || null, club_text_color: f.club_text_color || null,
-      club_logo_url: f.club_logo_url || null,
-      start_year: Number(f.start_year), start_month: f.start_month ? Number(f.start_month) : null,
-      end_year: f.end_year ? Number(f.end_year) : null, end_month: f.end_month ? Number(f.end_month) : null,
+      club_name: selectedClub.name,
+      club_country: selectedClub.country,
+      club_color: selectedClub.primary_color,
+      club_text_color: selectedClub.text_color,
+      club_logo_url: null,
+      start_year: Number(startYear),
+      start_month: startMonth ? Number(startMonth) : null,
+      end_year: endYear ? Number(endYear) : null,
+      end_month: endMonth ? Number(endMonth) : null,
     };
     const { error } = await supabase.from('contracts').insert(payload);
     if (error) { alert(error.message); return; }
-    setF({ start_year: new Date().getFullYear(), start_month: new Date().getMonth() + 1, club_color: '#1e3a8a', club_text_color: '#ffffff' });
-    setShowAdd(false); load();
+    resetForm(); setShowAdd(false); load();
   }
   async function delContract(id: string) { if (!confirm('Delete contract + all seasons?')) return; await supabase.from('contracts').delete().eq('id', id); load(); }
 
@@ -87,12 +106,13 @@ export default function CareerPage() {
         <div className="flex items-stretch">
           <div className="w-1.5" style={{ background: c.club_color ?? '#64748b' }} />
           <div className="flex-1 p-3 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.club_color ?? '#0f172a' }}>
-              {c.club_logo_url ? <img src={c.club_logo_url} alt="" className="w-full h-full object-contain p-1" /> : <span className="text-white text-xs font-bold">{c.club_name.slice(0, 2).toUpperCase()}</span>}
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.club_color ?? '#0f172a', color: c.club_text_color ?? '#ffffff' }}>
+              <span className="text-xs font-bold">{c.club_name.slice(0, 2).toUpperCase()}</span>
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{c.club_name}</div>
               <div className="text-xs text-slate-500">
+                {c.club_country && <span className="mr-1">{c.club_country}</span>}·{' '}
                 {c.start_month ? MONTHS[c.start_month - 1] + ' ' : ''}{c.start_year} → {c.end_year ? `${c.end_month ? MONTHS[c.end_month - 1] + ' ' : ''}${c.end_year}` : 'present'}
                 <span className="text-slate-400"> · {duration(c)}</span>
               </div>
@@ -116,20 +136,22 @@ export default function CareerPage() {
       </div>
 
       {showAdd && (
-        <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded-lg p-4 mb-5 grid gap-2 sm:grid-cols-3">
-          <input autoFocus value={f.club_name ?? ''} onChange={(e) => setF({ ...f, club_name: e.target.value })} placeholder="Club" className="sm:col-span-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <input value={f.club_country ?? ''} onChange={(e) => setF({ ...f, club_country: e.target.value })} placeholder="Country" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <input value={f.club_logo_url ?? ''} onChange={(e) => setF({ ...f, club_logo_url: e.target.value })} placeholder="Logo URL" className="sm:col-span-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <div className="flex gap-1 items-center"><input type="color" value={f.club_color ?? '#1e3a8a'} onChange={(e) => setF({ ...f, club_color: e.target.value })} className="w-10 h-9 rounded border border-slate-300 dark:border-slate-700" /><input type="color" value={f.club_text_color ?? '#ffffff'} onChange={(e) => setF({ ...f, club_text_color: e.target.value })} className="w-10 h-9 rounded border border-slate-300 dark:border-slate-700" /><span className="text-xs text-slate-500">colors</span></div>
-          <select value={f.start_month ?? ''} onChange={(e) => setF({ ...f, start_month: e.target.value ? Number(e.target.value) : null })} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm">
-            <option value="">Start month…</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-          </select>
-          <input type="number" value={f.start_year ?? ''} onChange={(e) => setF({ ...f, start_year: Number(e.target.value) })} placeholder="Start year" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <select value={f.end_month ?? ''} onChange={(e) => setF({ ...f, end_month: e.target.value ? Number(e.target.value) : null })} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm">
-            <option value="">End month (opt)…</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-          </select>
-          <input type="number" value={f.end_year ?? ''} onChange={(e) => setF({ ...f, end_year: e.target.value ? Number(e.target.value) : null })} placeholder="End year (opt)" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
-          <div className="sm:col-span-3 flex justify-end gap-2"><button onClick={() => setShowAdd(false)} className="text-sm text-slate-500 px-3">Cancel</button><button onClick={saveContract} className="bg-emerald-600 text-white rounded px-4 py-2 text-sm">Save</button></div>
+        <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded-lg p-4 mb-5">
+          <ClubPicker clubs={clubs} value={selectedClub} onChange={setSelectedClub} />
+          <div className="grid gap-2 sm:grid-cols-4 mt-3">
+            <select value={startMonth} onChange={(e) => setStartMonth(e.target.value ? Number(e.target.value) : '')} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm">
+              <option value="">Start month…</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+            <input type="number" value={startYear} onChange={(e) => setStartYear(Number(e.target.value))} placeholder="Start year" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
+            <select value={endMonth} onChange={(e) => setEndMonth(e.target.value ? Number(e.target.value) : '')} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm">
+              <option value="">End month (opt)…</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+            <input type="number" value={endYear} onChange={(e) => setEndYear(e.target.value ? Number(e.target.value) : '')} placeholder="End year (opt)" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm" />
+          </div>
+          <div className="flex justify-end gap-2 mt-3">
+            <button onClick={() => { setShowAdd(false); resetForm(); }} className="text-sm text-slate-500 px-3">Cancel</button>
+            <button onClick={saveContract} className="bg-emerald-600 text-white rounded px-4 py-2 text-sm">Save</button>
+          </div>
         </div>
       )}
 
@@ -172,6 +194,74 @@ export default function CareerPage() {
       )}
       {contracts.length === 0 && (
         <div className="text-slate-500 border border-dashed border-slate-300 rounded p-10 text-center">No tienes contracts aún. Click + Nuevo contract para empezar.</div>
+      )}
+    </div>
+  );
+}
+
+function ClubPicker({ clubs, value, onChange }: { clubs: Club[]; value: Club | null; onChange: (c: Club | null) => void }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clubs.slice(0, 50);
+    return clubs.filter((c) => c.name.toLowerCase().includes(q) || c.country.toLowerCase().includes(q)).slice(0, 50);
+  }, [clubs, query]);
+
+  // Group filtered by country
+  const grouped = useMemo(() => {
+    const m: Record<string, Club[]> = {};
+    for (const c of filtered) (m[c.country] = m[c.country] || []).push(c);
+    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [filtered]);
+
+  if (value) {
+    return (
+      <div className="rounded-lg p-3 flex items-center gap-3 border-2" style={{ background: value.primary_color, color: value.text_color, borderColor: value.primary_color }}>
+        <div className="w-12 h-12 rounded-lg bg-black/20 flex items-center justify-center font-bold text-lg shrink-0">{value.name.slice(0, 2).toUpperCase()}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs opacity-80 uppercase">{value.country}</div>
+          <div className="font-black text-lg truncate">{value.name}</div>
+        </div>
+        <button onClick={() => { onChange(null); setQuery(''); }} className="bg-black/20 hover:bg-black/40 rounded px-3 py-1 text-xs font-semibold">Change</button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        autoFocus
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Buscar club… (ej: Real Madrid, Haiti…)"
+        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2.5 text-sm"
+      />
+      {open && (
+        <div className="absolute z-20 top-full left-0 right-0 mt-1 max-h-80 overflow-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
+          {filtered.length === 0 ? (
+            <div className="p-4 text-sm text-slate-500 text-center">Ningún club coincide. Solo clubes del catálogo son permitidos.</div>
+          ) : grouped.map(([country, list]) => (
+            <div key={country}>
+              <div className="px-3 py-1 text-[10px] uppercase font-semibold text-slate-500 bg-slate-100 dark:bg-slate-900 sticky top-0">{country}</div>
+              {list.map((c) => (
+                <button key={c.id} onClick={() => { onChange(c); setQuery(''); setOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-emerald-50 dark:hover:bg-slate-700 text-left">
+                  <span className="w-6 h-6 rounded shrink-0" style={{ background: c.primary_color, borderLeft: `3px solid ${c.text_color}` }} />
+                  <span className="flex-1 truncate">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
