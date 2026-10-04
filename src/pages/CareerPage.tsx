@@ -30,6 +30,7 @@ export default function CareerPage() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [addMode, setAddMode] = useState<'club' | 'national'>('club');
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
   const [startMonth, setStartMonth] = useState<number | ''>(new Date().getMonth() + 1);
@@ -172,20 +173,30 @@ export default function CareerPage() {
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {[
-          ['Clubes', contracts.filter((c) => !c.is_national).length],
-          ['Seasons', seasons.length],
-          ['Trophies', totalWinners],
-          ['Active Club', activeClub?.club_name ?? '—'],
-        ].map(([l, v]) => (
-          <div key={l as string} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3">
-            <div className="text-[10px] uppercase text-slate-500 tracking-wide">{l}</div>
-            <div className="text-xl font-bold mt-0.5 truncate">{v as any}</div>
-          </div>
-        ))}
-      </div>
+      {/* Stats toggle */}
+      <button onClick={() => setShowStats((v) => !v)} className="w-full mb-3 flex items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-400 rounded-lg px-4 py-3 text-sm">
+        <span className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+          <span>📊</span>
+          <span className="font-semibold">Stats</span>
+          <span className="text-slate-400 text-xs">· {contracts.filter((c) => !c.is_national).length} clubes · {seasons.length} seasons · {totalWinners} 🏆 · {activeClub?.club_name ?? '—'}</span>
+        </span>
+        <span className="text-slate-400">{showStats ? '▲' : '▼'}</span>
+      </button>
+      {showStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[
+            ['Clubes', contracts.filter((c) => !c.is_national).length],
+            ['Seasons', seasons.length],
+            ['Trophies', totalWinners],
+            ['Active Club', activeClub?.club_name ?? '—'],
+          ].map(([l, v]) => (
+            <div key={l as string} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3">
+              <div className="text-[10px] uppercase text-slate-500 tracking-wide">{l}</div>
+              <div className="text-xl font-bold mt-0.5 truncate">{v as any}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {activeNational && (
         <div className="mb-6 flex items-center gap-3 rounded-lg p-3" style={{ background: activeNational.club_color ?? '#1e3a8a', color: activeNational.club_text_color ?? '#fff' }}>

@@ -1254,78 +1254,55 @@ insert into clubs_catalog (name, country, primary_color, text_color) values
 ('Ulsan HD', 'South Korea', '#005CA9', '#FFCB05')
 on conflict (name) do nothing;
 -- 010: Dedupe champion rows where same team appears under multiple name variants
--- Strategy: when both canonical name and alternate exist in same tournament,
---   keep the one with more wins (or more total titles), delete the other.
--- When only an alternate exists, rename it to canonical.
+-- Strategy: For each (tournament, canonical identity), rank rows by score,
+-- delete all but the top-ranked, then rename survivors to canonical.
 
--- Build alias map: alternates -> canonical
 create temporary table _aliases (alt text, canonical text) on commit drop;
 insert into _aliases (alt, canonical) values
-  -- PSG
+  -- France
   ('PSG', 'Paris Saint-Germain'),
   ('Paris SG', 'Paris Saint-Germain'),
   ('Paris Saint Germain', 'Paris Saint-Germain'),
   ('Paris St-Germain', 'Paris Saint-Germain'),
   ('Paris St Germain', 'Paris Saint-Germain'),
-  -- Marseille
   ('Olympique Marseille', 'Marseille'),
   ('Olympique de Marseille', 'Marseille'),
   ('OM', 'Marseille'),
   ('Olympique Marsella', 'Marseille'),
-  -- Monaco
   ('AS Monaco', 'Monaco'),
   ('A.S. Monaco', 'Monaco'),
-  -- Saint-Etienne
   ('AS Saint-Etienne', 'Saint-Etienne'),
   ('AS Saint Etienne', 'Saint-Etienne'),
   ('St-Etienne', 'Saint-Etienne'),
   ('St Etienne', 'Saint-Etienne'),
   ('ASSE', 'Saint-Etienne'),
-  -- Nantes
   ('FC Nantes', 'Nantes'),
-  -- Lyon
   ('Olympique Lyonnais', 'Lyon'),
   ('OL', 'Lyon'),
-  -- Lille
   ('LOSC Lille', 'Lille'),
   ('Lille OSC', 'Lille'),
-  -- Nice
   ('OGC Nice', 'Nice'),
-  -- Bordeaux
   ('Girondins Bordeaux', 'Bordeaux'),
   ('Girondins de Bordeaux', 'Bordeaux'),
-  -- Rennes
   ('Stade Rennais', 'Rennes'),
-  -- Reims
   ('Stade de Reims', 'Reims'),
-  -- Barcelona
+  -- Spain
   ('Barcelona', 'FC Barcelona'),
   ('Barca', 'FC Barcelona'),
-  ('Barça', 'FC Barcelona'),
-  -- Real Madrid
   ('R. Madrid', 'Real Madrid'),
   ('Madrid', 'Real Madrid'),
-  -- Atletico
-  ('Atlético Madrid', 'Atletico Madrid'),
   ('Atletico de Madrid', 'Atletico Madrid'),
   ('Club Atletico de Madrid', 'Atletico Madrid'),
-  -- Athletic Bilbao
   ('Athletic Club', 'Athletic Bilbao'),
   ('Athletic de Bilbao', 'Athletic Bilbao'),
-  -- Real Sociedad
   ('Real Sociedad de Futbol', 'Real Sociedad'),
-  -- Real Betis
   ('Betis', 'Real Betis'),
-  -- Deportivo
   ('Deportivo', 'Deportivo La Coruna'),
   ('Depor', 'Deportivo La Coruna'),
-  -- Sevilla
   ('Sevilla FC', 'Sevilla'),
-  -- Valencia
   ('Valencia CF', 'Valencia'),
-  -- Villarreal
   ('Villarreal CF', 'Villarreal'),
-  -- English teams
+  -- England
   ('Man United', 'Manchester United'),
   ('Man Utd', 'Manchester United'),
   ('Man U', 'Manchester United'),
@@ -1346,9 +1323,10 @@ insert into _aliases (alt, canonical) values
   ('Brighton and Hove Albion', 'Brighton'),
   ('Leeds', 'Leeds United'),
   ('West Bromwich', 'West Brom'),
+  ('West Bromwich Albion', 'West Brom'),
   ('WBA', 'West Brom'),
   ('Queens Park Rangers', 'QPR'),
-  -- Italian teams
+  -- Italy
   ('Inter', 'Inter Milan'),
   ('Internazionale', 'Inter Milan'),
   ('Milan', 'AC Milan'),
@@ -1361,7 +1339,7 @@ insert into _aliases (alt, canonical) values
   ('Udinese', 'Udinese Calcio'),
   ('Hellas', 'Hellas Verona'),
   ('Verona', 'Hellas Verona'),
-  -- German teams
+  -- Germany
   ('Bayern', 'Bayern Munich'),
   ('FC Bayern', 'Bayern Munich'),
   ('FC Bayern Munchen', 'Bayern Munich'),
@@ -1375,7 +1353,6 @@ insert into _aliases (alt, canonical) values
   ('Mgladbach', 'Borussia Monchengladbach'),
   ('Monchengladbach', 'Borussia Monchengladbach'),
   ('Gladbach', 'Borussia Monchengladbach'),
-  ('M''gladbach', 'Borussia Monchengladbach'),
   ('Stuttgart', 'VfB Stuttgart'),
   ('Bremen', 'Werder Bremen'),
   ('Hamburger', 'Hamburger SV'),
@@ -1385,69 +1362,58 @@ insert into _aliases (alt, canonical) values
   ('Koln', 'FC Koln'),
   ('Cologne', 'FC Koln'),
   ('1. FC Koln', 'FC Koln'),
-  -- Portuguese
+  -- Portugal / Netherlands / Scotland / Turkey / Russia / Ukraine
   ('SL Benfica', 'Benfica'),
   ('FC Porto', 'Porto'),
   ('Sporting Lisbon', 'Sporting CP'),
   ('Sporting', 'Sporting CP'),
   ('SC Braga', 'Braga'),
-  -- Dutch
   ('AFC Ajax', 'Ajax'),
   ('PSV', 'PSV Eindhoven'),
-  -- Other
   ('Celtic FC', 'Celtic'),
   ('Rangers FC', 'Rangers'),
   ('Galatasaray SK', 'Galatasaray'),
-  ('Fenerbahçe', 'Fenerbahce'),
-  ('Beşiktaş', 'Besiktas'),
-  -- Russia/Ukraine
   ('Shakhtar', 'Shakhtar Donetsk'),
   ('CSKA', 'CSKA Moscow'),
   ('Zenit', 'Zenit St. Petersburg')
 ;
 
--- Also handle whitespace/case variants automatically by normalizing:
--- Delete rows where a canonical with more wins already exists (merge losers)
-delete from champions c
-using _aliases a, champions canon
-where lower(trim(c.team_name)) = lower(trim(a.alt))
-  and canon.tournament_id = c.tournament_id
-  and lower(trim(canon.team_name)) = lower(trim(a.canonical))
-  and (canon.wins + canon.runners_up) >= (c.wins + c.runners_up);
-
--- When the alternate has MORE data than canonical, delete canonical instead and rename alternate
-with winners as (
-  select c.id as alt_id, canon.id as canon_id
+-- Step 1: Rank all champion rows by (tournament, canonical identity), delete losers
+-- "canonical identity" = alias.canonical if row is an alt, else row's own name
+with family as (
+  select
+    c.id,
+    c.tournament_id,
+    lower(trim(coalesce(a.canonical, c.team_name))) as canon_key,
+    coalesce(c.wins, 0) + coalesce(c.runners_up, 0) as score
   from champions c
-  join _aliases a on lower(trim(c.team_name)) = lower(trim(a.alt))
-  join champions canon on canon.tournament_id = c.tournament_id and lower(trim(canon.team_name)) = lower(trim(a.canonical))
-  where (c.wins + c.runners_up) > (canon.wins + canon.runners_up)
+  left join _aliases a on lower(trim(c.team_name)) = lower(trim(a.alt))
+),
+ranked as (
+  select id, row_number() over (
+    partition by tournament_id, canon_key
+    order by score desc, id asc
+  ) as rn
+  from family
 )
-delete from champions where id in (select canon_id from winners);
+delete from champions where id in (select id from ranked where rn > 1);
 
--- Rename remaining alternates to canonical (no conflict since canonicals were deleted or never existed)
+-- Step 2: Rename remaining alt rows to their canonical name
+-- Safe now because step 1 removed all duplicate (tournament, canonical) collisions
 update champions c
 set team_name = a.canonical
 from _aliases a
-where lower(trim(c.team_name)) = lower(trim(a.alt))
-  and not exists (
-    select 1 from champions c2
-    where c2.tournament_id = c.tournament_id
-      and lower(trim(c2.team_name)) = lower(trim(a.canonical))
-      and c2.id <> c.id
-  );
+where lower(trim(c.team_name)) = lower(trim(a.alt));
 
--- Final pass: dedupe EXACT normalized matches (whitespace/case only)
--- Keep the row with the most data (wins + runners_up), delete siblings
-delete from champions c
-using champions keep
-where c.tournament_id = keep.tournament_id
-  and c.id <> keep.id
-  and lower(regexp_replace(c.team_name, '\s+', ' ', 'g')) = lower(regexp_replace(keep.team_name, '\s+', ' ', 'g'))
-  and (
-    (keep.wins + keep.runners_up) > (c.wins + c.runners_up)
-    or ((keep.wins + keep.runners_up) = (c.wins + c.runners_up) and keep.id < c.id)
-  );
+-- Step 3: Final pass — dedupe any exact normalized duplicates (whitespace/case only)
+with ranked2 as (
+  select id, row_number() over (
+    partition by tournament_id, lower(regexp_replace(team_name, '\s+', ' ', 'g'))
+    order by coalesce(wins, 0) + coalesce(runners_up, 0) desc, id asc
+  ) as rn
+  from champions
+)
+delete from champions where id in (select id from ranked2 where rn > 1);
 -- 011: National teams support + career updates
 -- Adds is_national flag + seeds national teams + updates Freedge's career
 
@@ -1562,9 +1528,22 @@ where not exists (
   select 1 from contracts where club_name = 'Udinese Calcio' and is_national = false
 );
 
+-- Fix any existing contracts whose name matches a national team in the catalog
+-- (e.g., Portugal was manually added before the national toggle existed)
+update contracts c
+set is_national = true,
+    club_color = coalesce(c.club_color, cat.primary_color),
+    club_text_color = coalesce(c.club_text_color, cat.text_color),
+    club_country = coalesce(c.club_country, cat.country)
+from clubs_catalog cat
+where cat.name = c.club_name
+  and cat.is_national = true
+  and (c.is_national is null or c.is_national = false);
+
 -- Add Portugal national team (July 2026 - present, concurrent with clubs)
+-- Only inserts if NO Portugal contract exists at all (national or not)
 insert into contracts (club_name, club_country, club_color, club_text_color, start_year, start_month, end_year, end_month, is_national)
 select 'Portugal', 'Portugal', '#006600', '#DA291C', 2026, 7, null, null, true
 where not exists (
-  select 1 from contracts where club_name = 'Portugal' and is_national = true
+  select 1 from contracts where club_name = 'Portugal'
 );

@@ -112,9 +112,22 @@ where not exists (
   select 1 from contracts where club_name = 'Udinese Calcio' and is_national = false
 );
 
+-- Fix any existing contracts whose name matches a national team in the catalog
+-- (e.g., Portugal was manually added before the national toggle existed)
+update contracts c
+set is_national = true,
+    club_color = coalesce(c.club_color, cat.primary_color),
+    club_text_color = coalesce(c.club_text_color, cat.text_color),
+    club_country = coalesce(c.club_country, cat.country)
+from clubs_catalog cat
+where cat.name = c.club_name
+  and cat.is_national = true
+  and (c.is_national is null or c.is_national = false);
+
 -- Add Portugal national team (July 2026 - present, concurrent with clubs)
+-- Only inserts if NO Portugal contract exists at all (national or not)
 insert into contracts (club_name, club_country, club_color, club_text_color, start_year, start_month, end_year, end_month, is_national)
 select 'Portugal', 'Portugal', '#006600', '#DA291C', 2026, 7, null, null, true
 where not exists (
-  select 1 from contracts where club_name = 'Portugal' and is_national = true
+  select 1 from contracts where club_name = 'Portugal'
 );
