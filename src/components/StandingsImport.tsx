@@ -6,17 +6,22 @@ interface Props {
   tournamentId: string;
   yearEnd: number;
   catalog: string[]; // Known team names
+  initialRows?: ParsedRow[]; // Pre-fill (edit mode); when provided, skips the upload stage
   onClose: () => void;
   onSaved: () => void;
 }
 
 type Stage = 'pick' | 'ocr' | 'review';
 
-export default function StandingsImport({ tournamentId, yearEnd, catalog, onClose, onSaved }: Props) {
-  const [stage, setStage] = useState<Stage>('pick');
+function emptyRows(count: number): ParsedRow[] {
+  return Array.from({ length: count }, (_, i) => ({ position: i + 1, team: '', played: null, wins: null, draws: null, losses: null, gf: null, ga: null, points: null }));
+}
+
+export default function StandingsImport({ tournamentId, yearEnd, catalog, initialRows, onClose, onSaved }: Props) {
+  const [stage, setStage] = useState<Stage>(initialRows ? 'review' : 'pick');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
-  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [rows, setRows] = useState<ParsedRow[]>(initialRows && initialRows.length ? initialRows : (initialRows ? emptyRows(20) : []));
   const [rawText, setRawText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +74,7 @@ export default function StandingsImport({ tournamentId, yearEnd, catalog, onClos
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-white dark:bg-slate-900 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
-          <div><h2 className="text-lg font-bold">Importar tabla desde foto</h2><div className="text-xs text-slate-500">Season {yearEnd - 1}-{String(yearEnd).slice(-2)}</div></div>
+          <div><h2 className="text-lg font-bold">{initialRows ? 'Editar tabla' : 'Importar tabla desde foto'}</h2><div className="text-xs text-slate-500">Season {yearEnd - 1}-{String(yearEnd).slice(-2)}</div></div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
         </div>
 
@@ -129,8 +134,9 @@ export default function StandingsImport({ tournamentId, yearEnd, catalog, onClos
             </div>
             {rawText && <details className="mt-3"><summary className="text-xs text-slate-400 cursor-pointer">Ver texto OCR crudo</summary><pre className="mt-2 p-2 bg-slate-50 dark:bg-slate-800 text-xs overflow-auto max-h-40 rounded">{rawText}</pre></details>}
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setStage('pick')} className="text-sm text-slate-500 px-3">← Otra imagen</button>
-              <button onClick={save} disabled={saving} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white rounded px-5 py-2 text-sm font-semibold">{saving ? 'Guardando…' : `Guardar ${rows.length} filas`}</button>
+              {!initialRows && <button onClick={() => setStage('pick')} className="text-sm text-slate-500 px-3">← Otra imagen</button>}
+              <button onClick={onClose} className="text-sm text-slate-500 px-3">Cancel</button>
+              <button onClick={save} disabled={saving} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-300 text-white rounded px-5 py-2 text-sm font-semibold">{saving ? 'Guardando…' : `Guardar ${rows.filter(r => r.team).length} filas`}</button>
             </div>
           </div>
         )}

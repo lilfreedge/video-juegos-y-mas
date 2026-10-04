@@ -68,7 +68,6 @@ export default function SeasonDetailPage() {
       <Link to={`/career/contract/${season.contract_id}`} className="text-slate-500 hover:text-emerald-600 text-sm">← {contract?.club_name ?? 'Contract'}</Link>
       <div className="mt-3 mb-4">
         <h1 className="text-2xl font-bold">{season.label}</h1>
-        <div className="text-xs text-slate-500">{season.start_year}-{season.end_year}</div>
       </div>
 
       <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">

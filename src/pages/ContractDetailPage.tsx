@@ -22,9 +22,20 @@ export default function ContractDetailPage() {
       supabase.from('seasons').select('*').eq('contract_id', id).order('start_year', { ascending: true }),
     ]);
     setC(cd as Contract | null); setSeasons((sd ?? []) as Season[]);
-    // Auto-suggest next season label from last season or contract start
-    if (sd && sd.length) { const y = sd[sd.length - 1].end_year; setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`); }
-    else if (cd) { const y = (cd as Contract).start_year; setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`); }
+    // Auto-suggest next season label from last season or contract start.
+    // Falls back to parsing the label if end_year is corrupt (< 1900).
+    const yearFromSeason = (s: Season): number => {
+      if (s.end_year >= 1900) return s.end_year;
+      const m = s.label.match(/(\d{4})/);
+      return m ? Number(m[1]) + 1 : new Date().getFullYear();
+    };
+    if (sd && sd.length) {
+      const y = yearFromSeason(sd[sd.length - 1] as Season);
+      setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`);
+    } else if (cd) {
+      const y = (cd as Contract).start_year;
+      setLabel(`Season ${y}-${String((y + 1) % 100).padStart(2, '0')}`);
+    }
     setLoading(false);
   }
   useEffect(() => { load(); }, [id]);
@@ -46,7 +57,10 @@ export default function ContractDetailPage() {
   }
   async function delSeason(sid: string) { if (!confirm('Delete season + all data?')) return; await supabase.from('seasons').delete().eq('id', sid); load(); }
   async function cloneToNext(prev: Season) {
-    const nextStart = prev.end_year;
+    // Use end_year if valid; otherwise parse the label
+    const nextStart = prev.end_year >= 1900
+      ? prev.end_year
+      : (() => { const m = prev.label.match(/(\d{4})/); return m ? Number(m[1]) + 1 : new Date().getFullYear(); })();
     const newLabel = `Season ${nextStart}-${String((nextStart + 1) % 100).padStart(2, '0')}`;
     const { data: created, error } = await supabase.from('seasons').insert({ contract_id: id, label: newLabel, start_year: nextStart, end_year: nextStart + 1 }).select().maybeSingle();
     if (error || !created) { alert(error?.message ?? 'error'); return; }
@@ -88,7 +102,6 @@ export default function ContractDetailPage() {
           <div key={s.id} className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3 hover:border-emerald-400 transition">
             <Link to={`/career/season/${s.id}`} className="flex-1 min-w-0">
               <div className="font-bold">{s.label}</div>
-              <div className="text-xs text-slate-500">{s.start_year}-{s.end_year}</div>
             </Link>
             {i === seasons.length - 1 && <button onClick={() => cloneToNext(s)} className="text-xs border border-slate-300 dark:border-slate-700 hover:border-emerald-400 rounded px-2 py-1" title="Clone to next season">↻ Clone next</button>}
             <button onClick={() => delSeason(s.id)} className="text-slate-400 hover:text-red-500 text-sm">×</button>

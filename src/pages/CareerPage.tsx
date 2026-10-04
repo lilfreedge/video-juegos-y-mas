@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 
-interface Contract { id: string; club_name: string; club_country: string | null; club_color: string | null; club_text_color: string | null; club_logo_url: string | null; start_year: number; start_month: number | null; end_year: number | null; end_month: number | null; }
+interface Contract { id: string; club_name: string; club_country: string | null; club_color: string | null; club_text_color: string | null; club_logo_url: string | null; start_year: number; start_month: number | null; end_year: number | null; end_month: number | null; is_national: boolean; }
 interface Season { id: string; contract_id: string; label: string; start_year: number; end_year: number; }
 interface Trophy { id: string; season_id: string; tournament_name_snapshot: string; result: string; }
-interface Club { id: string; name: string; country: string; primary_color: string; text_color: string; }
+interface Club { id: string; name: string; country: string; primary_color: string; text_color: string; is_national: boolean; }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -30,6 +30,7 @@ export default function CareerPage() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [addMode, setAddMode] = useState<'club' | 'national'>('club');
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
   const [startMonth, setStartMonth] = useState<number | ''>(new Date().getMonth() + 1);
   const [startYear, setStartYear] = useState<number>(new Date().getFullYear());
@@ -72,6 +73,7 @@ export default function CareerPage() {
       start_month: startMonth ? Number(startMonth) : null,
       end_year: endYear ? Number(endYear) : null,
       end_month: endMonth ? Number(endMonth) : null,
+      is_national: addMode === 'national',
     };
     const { error } = await supabase.from('contracts').insert(payload);
     if (error) { alert(error.message); return; }
@@ -96,7 +98,13 @@ export default function CareerPage() {
   }
   const trophyList = Object.entries(trophyCounts).sort((a, b) => b[1].count - a[1].count);
 
-  const activeContract = active[0];
+  // Split active + previous by club vs national
+  const activeClub = active.find((c) => !c.is_national);
+  const activeNational = active.find((c) => c.is_national);
+  const activeClubs = active.filter((c) => !c.is_national);
+  const activeNationals = active.filter((c) => c.is_national);
+  const previousClubs = previous.filter((c) => !c.is_national);
+  const previousNationals = previous.filter((c) => c.is_national);
 
   function ContractCard({ c }: { c: Contract }) {
     const cs = seasons.filter((s) => s.contract_id === c.id);
@@ -107,7 +115,7 @@ export default function CareerPage() {
           <div className="w-1.5" style={{ background: c.club_color ?? '#64748b' }} />
           <div className="flex-1 p-3 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.club_color ?? '#0f172a', color: c.club_text_color ?? '#ffffff' }}>
-              <span className="text-xs font-bold">{c.club_name.slice(0, 2).toUpperCase()}</span>
+              {c.is_national ? <span className="text-lg">🌐</span> : <span className="text-xs font-bold">{c.club_name.slice(0, 2).toUpperCase()}</span>}
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{c.club_name}</div>
@@ -139,10 +147,14 @@ export default function CareerPage() {
         <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded-lg p-4 mb-5">
           {clubs.length === 0 && (
             <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded text-sm text-amber-900">
-              ⚠️ <strong>Catálogo vacío.</strong> Corre la migración <code className="bg-amber-200 px-1 rounded">005_clubs_catalog.sql</code> en Supabase para cargar los ~90 clubes (incluyendo Haiti United).
+              ⚠️ <strong>Catálogo vacío.</strong> Corre la migración <code className="bg-amber-200 px-1 rounded">005_clubs_catalog.sql</code> en Supabase para cargar los ~400 clubes.
             </div>
           )}
-          <ClubPicker clubs={clubs} value={selectedClub} onChange={setSelectedClub} />
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-3 text-sm">
+            <button onClick={() => { setAddMode('club'); setSelectedClub(null); }} className={`px-4 py-1.5 ${addMode === 'club' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}>⚽ Club</button>
+            <button onClick={() => { setAddMode('national'); setSelectedClub(null); }} className={`px-4 py-1.5 ${addMode === 'national' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}>🌐 Selección</button>
+          </div>
+          <ClubPicker clubs={clubs.filter((c) => !!c.is_national === (addMode === 'national'))} value={selectedClub} onChange={setSelectedClub} isNational={addMode === 'national'} />
           <div className="grid gap-2 sm:grid-cols-4 mt-3">
             <select value={startMonth} onChange={(e) => setStartMonth(e.target.value ? Number(e.target.value) : '')} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm">
               <option value="">Start month…</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
@@ -162,13 +174,29 @@ export default function CareerPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {[['Clubs', contracts.length], ['Seasons', seasons.length], ['Trophies', totalWinners], ['Active Contract', activeContract?.club_name ?? '—']].map(([l, v]) => (
+        {[
+          ['Clubes', contracts.filter((c) => !c.is_national).length],
+          ['Seasons', seasons.length],
+          ['Trophies', totalWinners],
+          ['Active Club', activeClub?.club_name ?? '—'],
+        ].map(([l, v]) => (
           <div key={l as string} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3">
             <div className="text-[10px] uppercase text-slate-500 tracking-wide">{l}</div>
             <div className="text-xl font-bold mt-0.5 truncate">{v as any}</div>
           </div>
         ))}
       </div>
+
+      {activeNational && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg p-3" style={{ background: activeNational.club_color ?? '#1e3a8a', color: activeNational.club_text_color ?? '#fff' }}>
+          <span className="text-2xl">🌐</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase opacity-80 tracking-wide">Selección activa</div>
+            <div className="text-lg font-bold truncate">{activeNational.club_name}</div>
+          </div>
+          <Link to={`/career/contract/${activeNational.id}`} className="text-xs bg-black/20 hover:bg-black/40 rounded px-3 py-1">Ver</Link>
+        </div>
+      )}
 
       {/* Trophy showcase */}
       {trophyList.length > 0 && (
@@ -184,17 +212,24 @@ export default function CareerPage() {
         </section>
       )}
 
-      {/* Timeline */}
-      {active.length > 0 && (
+      {/* Clubs timeline */}
+      {activeClubs.length > 0 && (
         <section className="mb-6">
-          <div className="text-xs uppercase font-semibold text-emerald-700 mb-2">🟢 Active</div>
-          <div className="grid gap-2">{active.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+          <div className="text-xs uppercase font-semibold text-emerald-700 mb-2">🟢 Clubes activos</div>
+          <div className="grid gap-2">{activeClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
         </section>
       )}
-      {previous.length > 0 && (
-        <section>
-          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">📁 Previous</div>
-          <div className="grid gap-2">{previous.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+      {previousClubs.length > 0 && (
+        <section className="mb-6">
+          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">📁 Clubes anteriores</div>
+          <div className="grid gap-2">{previousClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
+        </section>
+      )}
+      {/* National team history */}
+      {(activeNationals.length > 0 || previousNationals.length > 0) && (
+        <section className="mb-6">
+          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">🌐 Selecciones</div>
+          <div className="grid gap-2">{[...activeNationals, ...previousNationals].map((c) => <ContractCard key={c.id} c={c} />)}</div>
         </section>
       )}
       {contracts.length === 0 && (
@@ -204,7 +239,7 @@ export default function CareerPage() {
   );
 }
 
-function ClubPicker({ clubs, value, onChange }: { clubs: Club[]; value: Club | null; onChange: (c: Club | null) => void }) {
+function ClubPicker({ clubs, value, onChange, isNational = false }: { clubs: Club[]; value: Club | null; onChange: (c: Club | null) => void; isNational?: boolean }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -248,13 +283,13 @@ function ClubPicker({ clubs, value, onChange }: { clubs: Club[]; value: Club | n
         value={query}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        placeholder="Buscar club… (ej: Real Madrid, Haiti…)"
+        placeholder={isNational ? 'Buscar selección… (ej: Portugal, Brazil…)' : 'Buscar club… (ej: Real Madrid, Udinese…)'}
         className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2.5 text-sm"
       />
       {open && (
         <div className="absolute z-20 top-full left-0 right-0 mt-1 max-h-80 overflow-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
           {filtered.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500 text-center">Ningún club coincide. Solo clubes del catálogo son permitidos.</div>
+            <div className="p-4 text-sm text-slate-500 text-center">Ningún {isNational ? 'país' : 'club'} coincide. Solo entradas del catálogo son permitidas.</div>
           ) : grouped.map(([country, list]) => (
             <div key={country}>
               <div className="px-3 py-1 text-[10px] uppercase font-semibold text-slate-500 bg-slate-100 dark:bg-slate-900 sticky top-0">{country}</div>

@@ -880,6 +880,13 @@ where not exists (select 1 from contracts where club_name = 'Haiti United');
 
 -- If the contract already exists with wrong start year (e.g., 2014 from earlier seed), fix it
 update contracts set start_year = 2026, start_month = 7 where club_name = 'Haiti United' and start_year = 2014;
+
+-- Fix seasons with corrupt years from an earlier UI bug (start_year=0, end_year=1)
+-- Parse the "Season YYYY-YY" or "YYYY-YYYY" from the label and update
+update seasons
+set start_year = cast(substring(label from '(\d{4})') as int),
+    end_year   = cast(substring(label from '(\d{4})') as int) + 1
+where start_year < 1900 and label ~ '\d{4}';
 -- 008: Standings — league tables per tournament/season
 create table if not exists standings (
   id uuid primary key default gen_random_uuid(),
@@ -1246,3 +1253,318 @@ insert into clubs_catalog (name, country, primary_color, text_color) values
 ('Jeonbuk Hyundai', 'South Korea', '#008057', '#FFCB05'),
 ('Ulsan HD', 'South Korea', '#005CA9', '#FFCB05')
 on conflict (name) do nothing;
+-- 010: Dedupe champion rows where same team appears under multiple name variants
+-- Strategy: when both canonical name and alternate exist in same tournament,
+--   keep the one with more wins (or more total titles), delete the other.
+-- When only an alternate exists, rename it to canonical.
+
+-- Build alias map: alternates -> canonical
+create temporary table _aliases (alt text, canonical text) on commit drop;
+insert into _aliases (alt, canonical) values
+  -- PSG
+  ('PSG', 'Paris Saint-Germain'),
+  ('Paris SG', 'Paris Saint-Germain'),
+  ('Paris Saint Germain', 'Paris Saint-Germain'),
+  ('Paris St-Germain', 'Paris Saint-Germain'),
+  ('Paris St Germain', 'Paris Saint-Germain'),
+  -- Marseille
+  ('Olympique Marseille', 'Marseille'),
+  ('Olympique de Marseille', 'Marseille'),
+  ('OM', 'Marseille'),
+  ('Olympique Marsella', 'Marseille'),
+  -- Monaco
+  ('AS Monaco', 'Monaco'),
+  ('A.S. Monaco', 'Monaco'),
+  -- Saint-Etienne
+  ('AS Saint-Etienne', 'Saint-Etienne'),
+  ('AS Saint Etienne', 'Saint-Etienne'),
+  ('St-Etienne', 'Saint-Etienne'),
+  ('St Etienne', 'Saint-Etienne'),
+  ('ASSE', 'Saint-Etienne'),
+  -- Nantes
+  ('FC Nantes', 'Nantes'),
+  -- Lyon
+  ('Olympique Lyonnais', 'Lyon'),
+  ('OL', 'Lyon'),
+  -- Lille
+  ('LOSC Lille', 'Lille'),
+  ('Lille OSC', 'Lille'),
+  -- Nice
+  ('OGC Nice', 'Nice'),
+  -- Bordeaux
+  ('Girondins Bordeaux', 'Bordeaux'),
+  ('Girondins de Bordeaux', 'Bordeaux'),
+  -- Rennes
+  ('Stade Rennais', 'Rennes'),
+  -- Reims
+  ('Stade de Reims', 'Reims'),
+  -- Barcelona
+  ('Barcelona', 'FC Barcelona'),
+  ('Barca', 'FC Barcelona'),
+  ('Barça', 'FC Barcelona'),
+  -- Real Madrid
+  ('R. Madrid', 'Real Madrid'),
+  ('Madrid', 'Real Madrid'),
+  -- Atletico
+  ('Atlético Madrid', 'Atletico Madrid'),
+  ('Atletico de Madrid', 'Atletico Madrid'),
+  ('Club Atletico de Madrid', 'Atletico Madrid'),
+  -- Athletic Bilbao
+  ('Athletic Club', 'Athletic Bilbao'),
+  ('Athletic de Bilbao', 'Athletic Bilbao'),
+  -- Real Sociedad
+  ('Real Sociedad de Futbol', 'Real Sociedad'),
+  -- Real Betis
+  ('Betis', 'Real Betis'),
+  -- Deportivo
+  ('Deportivo', 'Deportivo La Coruna'),
+  ('Depor', 'Deportivo La Coruna'),
+  -- Sevilla
+  ('Sevilla FC', 'Sevilla'),
+  -- Valencia
+  ('Valencia CF', 'Valencia'),
+  -- Villarreal
+  ('Villarreal CF', 'Villarreal'),
+  -- English teams
+  ('Man United', 'Manchester United'),
+  ('Man Utd', 'Manchester United'),
+  ('Man U', 'Manchester United'),
+  ('Manchester Utd', 'Manchester United'),
+  ('Man City', 'Manchester City'),
+  ('Manchester C', 'Manchester City'),
+  ('Spurs', 'Tottenham'),
+  ('Tottenham Hotspur', 'Tottenham'),
+  ('Newcastle United', 'Newcastle'),
+  ('Newcastle Utd', 'Newcastle'),
+  ('Wolverhampton', 'Wolves'),
+  ('Wolverhampton Wanderers', 'Wolves'),
+  ('West Ham United', 'West Ham'),
+  ('West Ham Utd', 'West Ham'),
+  ('Nottingham', 'Nottingham Forest'),
+  ('Forest', 'Nottingham Forest'),
+  ('Brighton & Hove Albion', 'Brighton'),
+  ('Brighton and Hove Albion', 'Brighton'),
+  ('Leeds', 'Leeds United'),
+  ('West Bromwich', 'West Brom'),
+  ('WBA', 'West Brom'),
+  ('Queens Park Rangers', 'QPR'),
+  -- Italian teams
+  ('Inter', 'Inter Milan'),
+  ('Internazionale', 'Inter Milan'),
+  ('Milan', 'AC Milan'),
+  ('Associazione Calcio Milan', 'AC Milan'),
+  ('SSC Napoli', 'Napoli'),
+  ('AS Roma', 'Roma'),
+  ('SS Lazio', 'Lazio'),
+  ('ACF Fiorentina', 'Fiorentina'),
+  ('Bologna FC', 'Bologna'),
+  ('Udinese', 'Udinese Calcio'),
+  ('Hellas', 'Hellas Verona'),
+  ('Verona', 'Hellas Verona'),
+  -- German teams
+  ('Bayern', 'Bayern Munich'),
+  ('FC Bayern', 'Bayern Munich'),
+  ('FC Bayern Munchen', 'Bayern Munich'),
+  ('Bayern Munchen', 'Bayern Munich'),
+  ('Dortmund', 'Borussia Dortmund'),
+  ('BVB', 'Borussia Dortmund'),
+  ('Leverkusen', 'Bayer Leverkusen'),
+  ('Bayer 04 Leverkusen', 'Bayer Leverkusen'),
+  ('Leipzig', 'RB Leipzig'),
+  ('Frankfurt', 'Eintracht Frankfurt'),
+  ('Mgladbach', 'Borussia Monchengladbach'),
+  ('Monchengladbach', 'Borussia Monchengladbach'),
+  ('Gladbach', 'Borussia Monchengladbach'),
+  ('M''gladbach', 'Borussia Monchengladbach'),
+  ('Stuttgart', 'VfB Stuttgart'),
+  ('Bremen', 'Werder Bremen'),
+  ('Hamburger', 'Hamburger SV'),
+  ('Hamburg SV', 'Hamburger SV'),
+  ('Hamburg', 'Hamburger SV'),
+  ('HSV', 'Hamburger SV'),
+  ('Koln', 'FC Koln'),
+  ('Cologne', 'FC Koln'),
+  ('1. FC Koln', 'FC Koln'),
+  -- Portuguese
+  ('SL Benfica', 'Benfica'),
+  ('FC Porto', 'Porto'),
+  ('Sporting Lisbon', 'Sporting CP'),
+  ('Sporting', 'Sporting CP'),
+  ('SC Braga', 'Braga'),
+  -- Dutch
+  ('AFC Ajax', 'Ajax'),
+  ('PSV', 'PSV Eindhoven'),
+  -- Other
+  ('Celtic FC', 'Celtic'),
+  ('Rangers FC', 'Rangers'),
+  ('Galatasaray SK', 'Galatasaray'),
+  ('Fenerbahçe', 'Fenerbahce'),
+  ('Beşiktaş', 'Besiktas'),
+  -- Russia/Ukraine
+  ('Shakhtar', 'Shakhtar Donetsk'),
+  ('CSKA', 'CSKA Moscow'),
+  ('Zenit', 'Zenit St. Petersburg')
+;
+
+-- Also handle whitespace/case variants automatically by normalizing:
+-- Delete rows where a canonical with more wins already exists (merge losers)
+delete from champions c
+using _aliases a, champions canon
+where lower(trim(c.team_name)) = lower(trim(a.alt))
+  and canon.tournament_id = c.tournament_id
+  and lower(trim(canon.team_name)) = lower(trim(a.canonical))
+  and (canon.wins + canon.runners_up) >= (c.wins + c.runners_up);
+
+-- When the alternate has MORE data than canonical, delete canonical instead and rename alternate
+with winners as (
+  select c.id as alt_id, canon.id as canon_id
+  from champions c
+  join _aliases a on lower(trim(c.team_name)) = lower(trim(a.alt))
+  join champions canon on canon.tournament_id = c.tournament_id and lower(trim(canon.team_name)) = lower(trim(a.canonical))
+  where (c.wins + c.runners_up) > (canon.wins + canon.runners_up)
+)
+delete from champions where id in (select canon_id from winners);
+
+-- Rename remaining alternates to canonical (no conflict since canonicals were deleted or never existed)
+update champions c
+set team_name = a.canonical
+from _aliases a
+where lower(trim(c.team_name)) = lower(trim(a.alt))
+  and not exists (
+    select 1 from champions c2
+    where c2.tournament_id = c.tournament_id
+      and lower(trim(c2.team_name)) = lower(trim(a.canonical))
+      and c2.id <> c.id
+  );
+
+-- Final pass: dedupe EXACT normalized matches (whitespace/case only)
+-- Keep the row with the most data (wins + runners_up), delete siblings
+delete from champions c
+using champions keep
+where c.tournament_id = keep.tournament_id
+  and c.id <> keep.id
+  and lower(regexp_replace(c.team_name, '\s+', ' ', 'g')) = lower(regexp_replace(keep.team_name, '\s+', ' ', 'g'))
+  and (
+    (keep.wins + keep.runners_up) > (c.wins + c.runners_up)
+    or ((keep.wins + keep.runners_up) = (c.wins + c.runners_up) and keep.id < c.id)
+  );
+-- 011: National teams support + career updates
+-- Adds is_national flag + seeds national teams + updates Freedge's career
+
+-- Add is_national column to contracts and catalog
+alter table contracts add column if not exists is_national boolean default false;
+alter table clubs_catalog add column if not exists is_national boolean default false;
+
+-- Mark existing non-national rows (should already be false by default)
+update clubs_catalog set is_national = false where is_national is null;
+update contracts set is_national = false where is_national is null;
+
+-- Add national teams (FIFA playable countries)
+insert into clubs_catalog (name, country, primary_color, text_color, is_national) values
+-- Europe (UEFA)
+('Portugal', 'Portugal', '#006600', '#DA291C', true),
+('Spain', 'Spain', '#AA151B', '#F1BF00', true),
+('France', 'France', '#002395', '#FFFFFF', true),
+('Germany', 'Germany', '#000000', '#DD0000', true),
+('Italy', 'Italy', '#0066CC', '#FFFFFF', true),
+('England', 'England', '#FFFFFF', '#CE1126', true),
+('Belgium', 'Belgium', '#000000', '#FDDA24', true),
+('Netherlands', 'Netherlands', '#F36C21', '#FFFFFF', true),
+('Croatia', 'Croatia', '#D21034', '#FFFFFF', true),
+('Switzerland', 'Switzerland', '#D21034', '#FFFFFF', true),
+('Austria', 'Austria', '#D21034', '#FFFFFF', true),
+('Sweden', 'Sweden', '#005CFF', '#FECC00', true),
+('Denmark', 'Denmark', '#C8102E', '#FFFFFF', true),
+('Norway', 'Norway', '#D21034', '#FFFFFF', true),
+('Finland', 'Finland', '#005CFF', '#FFFFFF', true),
+('Poland', 'Poland', '#D21034', '#FFFFFF', true),
+('Czech Republic', 'Czech Republic', '#11457E', '#FFFFFF', true),
+('Hungary', 'Hungary', '#CE2939', '#FFFFFF', true),
+('Serbia', 'Serbia', '#D21034', '#FFFFFF', true),
+('Ukraine', 'Ukraine', '#005BBB', '#FFCB05', true),
+('Scotland', 'Scotland', '#005CA9', '#FFFFFF', true),
+('Wales', 'Wales', '#D21034', '#FFFFFF', true),
+('Ireland', 'Ireland', '#008057', '#FFFFFF', true),
+('Northern Ireland', 'Northern Ireland', '#005CA9', '#FFFFFF', true),
+('Turkey', 'Turkey', '#D21034', '#FFFFFF', true),
+('Greece', 'Greece', '#0D5EAF', '#FFFFFF', true),
+('Romania', 'Romania', '#005CFF', '#FFCB05', true),
+('Russia', 'Russia', '#D21034', '#FFFFFF', true),
+('Albania', 'Albania', '#D21034', '#000000', true),
+('Slovakia', 'Slovakia', '#005CA9', '#FFFFFF', true),
+-- South America (CONMEBOL)
+('Argentina', 'Argentina', '#75AADB', '#FFFFFF', true),
+('Brazil', 'Brazil', '#009C3B', '#FFDF00', true),
+('Uruguay', 'Uruguay', '#5CBFEB', '#FFFFFF', true),
+('Colombia', 'Colombia', '#FFCB05', '#005CFF', true),
+('Chile', 'Chile', '#D21034', '#005CFF', true),
+('Peru', 'Peru', '#D21034', '#FFFFFF', true),
+('Ecuador', 'Ecuador', '#FFCB05', '#005CFF', true),
+('Paraguay', 'Paraguay', '#D21034', '#FFFFFF', true),
+('Venezuela', 'Venezuela', '#891C32', '#FFCB05', true),
+('Bolivia', 'Bolivia', '#008057', '#FFCB05', true),
+-- North America (CONCACAF)
+('Mexico', 'Mexico', '#006847', '#CE1126', true),
+('United States', 'USA', '#1D3F94', '#D22630', true),
+('Canada', 'Canada', '#D21034', '#FFFFFF', true),
+('Costa Rica', 'Costa Rica', '#D21034', '#005CFF', true),
+('Panama', 'Panama', '#D21034', '#005CFF', true),
+('Jamaica', 'Jamaica', '#008057', '#FFCB05', true),
+('Honduras', 'Honduras', '#005CFF', '#FFFFFF', true),
+('Haiti', 'Haiti', '#003F87', '#D21034', true),
+('Dominican Republic', 'Dominican Republic', '#005CA9', '#D21034', true),
+('El Salvador', 'El Salvador', '#005CFF', '#FFFFFF', true),
+('Guatemala', 'Guatemala', '#005CA9', '#FFFFFF', true),
+-- Africa (CAF)
+('Senegal', 'Senegal', '#008057', '#FFCB05', true),
+('Morocco', 'Morocco', '#D21034', '#008057', true),
+('Egypt', 'Egypt', '#D21034', '#000000', true),
+('Nigeria', 'Nigeria', '#008057', '#FFFFFF', true),
+('Ghana', 'Ghana', '#D21034', '#FFCB05', true),
+('Algeria', 'Algeria', '#008057', '#FFFFFF', true),
+('Cameroon', 'Cameroon', '#008057', '#D21034', true),
+('Tunisia', 'Tunisia', '#D21034', '#FFFFFF', true),
+('Ivory Coast', 'Ivory Coast', '#FD7E14', '#008057', true),
+('South Africa', 'South Africa', '#008057', '#FFCB05', true),
+('Mali', 'Mali', '#008057', '#FFCB05', true),
+-- Asia (AFC)
+('Japan', 'Japan', '#005CA9', '#FFFFFF', true),
+('South Korea', 'South Korea', '#D21034', '#005CA9', true),
+('Australia', 'Australia', '#FFCB05', '#008057', true),
+('Saudi Arabia', 'Saudi Arabia', '#008057', '#FFFFFF', true),
+('Iran', 'Iran', '#008057', '#D21034', true),
+('Qatar', 'Qatar', '#891C32', '#FFFFFF', true),
+('UAE', 'UAE', '#D21034', '#008057', true),
+('Iraq', 'Iraq', '#D21034', '#FFFFFF', true),
+('China', 'China', '#D21034', '#FFCB05', true),
+('Jordan', 'Jordan', '#D21034', '#FFFFFF', true),
+-- Oceania (OFC)
+('New Zealand', 'New Zealand', '#000000', '#FFFFFF', true)
+on conflict (name) do nothing;
+
+-- CAREER UPDATES
+
+-- Delete Haiti United squad (user has no records/photos)
+delete from squad_players where season_id in (
+  select s.id from seasons s
+  join contracts c on s.contract_id = c.id
+  where c.club_name = 'Haiti United' and c.is_national = false
+);
+
+-- Update Haiti United contract: ended May 2027
+update contracts set end_year = 2027, end_month = 5
+where club_name = 'Haiti United' and is_national = false and end_year is null;
+
+-- Add Udinese Calcio contract (May 2027 - present)
+insert into contracts (club_name, club_country, club_color, club_text_color, start_year, start_month, end_year, end_month, is_national)
+select 'Udinese Calcio', 'Italy', '#000000', '#FFFFFF', 2027, 5, null, null, false
+where not exists (
+  select 1 from contracts where club_name = 'Udinese Calcio' and is_national = false
+);
+
+-- Add Portugal national team (July 2026 - present, concurrent with clubs)
+insert into contracts (club_name, club_country, club_color, club_text_color, start_year, start_month, end_year, end_month, is_national)
+select 'Portugal', 'Portugal', '#006600', '#DA291C', 2026, 7, null, null, true
+where not exists (
+  select 1 from contracts where club_name = 'Portugal' and is_national = true
+);

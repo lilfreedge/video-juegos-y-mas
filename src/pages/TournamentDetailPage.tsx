@@ -18,6 +18,7 @@ export default function TournamentDetailPage() {
   const [catalog, setCatalog] = useState<string[]>([]);
   const [standingsYear, setStandingsYear] = useState<number>(new Date().getFullYear() + 1);
   const [showImport, setShowImport] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingC, setEditingC] = useState<string | null>(null); // id or 'new'
   const [editingS, setEditingS] = useState<string | null>(null);
@@ -153,7 +154,8 @@ export default function TournamentDetailPage() {
               </select>
             )}
             <input type="number" value={standingsYear} onChange={(e) => setStandingsYear(Number(e.target.value))} placeholder="Año fin" className="w-24 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs" title="Año fin de temporada (ej: 2027 para 2026-27)" />
-            <button onClick={() => setShowImport(true)} className="text-xs bg-emerald-600 text-white rounded px-3 py-1">📷 Subir foto</button>
+            <button onClick={() => setShowEdit(true)} className="text-xs bg-emerald-600 text-white rounded px-3 py-1">✎ Editar manual</button>
+            <button onClick={() => setShowImport(true)} className="text-xs border border-slate-300 dark:border-slate-700 hover:border-emerald-400 rounded px-3 py-1" title="OCR aún no muy preciso para FIFA">📷 Foto</button>
             {standingsForYear.length > 0 && <button onClick={delStandings} className="text-xs text-slate-400 hover:text-red-500 px-2">🗑</button>}
           </div>
         </div>
