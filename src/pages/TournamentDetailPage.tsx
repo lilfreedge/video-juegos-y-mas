@@ -127,7 +127,7 @@ export default function TournamentDetailPage() {
           </div>
           {editingS === 'new' && (
             <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded p-3 mb-3 grid gap-2 sm:grid-cols-3">
-              <input type="number" value={sForm.year ?? ''} onChange={(e) => setSForm({ ...sForm, year: Number(e.target.value) })} placeholder="End year" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm" />
+              <input type="number" value={sForm.year ?? ''} onChange={(e) => setSForm({ ...sForm, year: Number(e.target.value) })} placeholder="Season end year (e.g. 2015 for 2014-15)" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm" />
               <input value={sForm.player_name ?? ''} onChange={(e) => setSForm({ ...sForm, player_name: e.target.value })} placeholder="Player" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm" />
               <input type="number" value={sForm.goals ?? ''} onChange={(e) => setSForm({ ...sForm, goals: Number(e.target.value) })} placeholder="Goals" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm" />
               <input value={sForm.nationality ?? ''} onChange={(e) => setSForm({ ...sForm, nationality: e.target.value })} placeholder="Nationality" className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-sm" />
@@ -145,7 +145,7 @@ export default function TournamentDetailPage() {
                   <td className="px-3 py-2 font-medium">{s.player_name} {s.from_my_career && '⭐'}</td>
                   <td className="px-3 py-2 text-right font-semibold">{s.goals}</td>
                   <td className="px-3 py-2">{s.nationality ?? '—'}</td>
-                  <td className="px-3 py-2 font-mono">{s.year}</td>
+                  <td className="px-3 py-2 font-mono">{s.year - 1}-{String(s.year).slice(-2)}</td>
                   <td className="px-3 py-2">{s.team ?? '—'}</td>
                   <td className="px-3 py-2 opacity-0 group-hover:opacity-100"><button onClick={() => delScorer(s.id)} className="text-slate-400 hover:text-red-500 text-sm">×</button></td>
                 </tr>

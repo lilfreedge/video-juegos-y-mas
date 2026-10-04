@@ -57,7 +57,7 @@ insert into clubs_catalog (name, country, primary_color, text_color) values
 ('Fiorentina', 'Italy', '#482E92', '#FFFFFF'),
 ('Bologna', 'Italy', '#1B2746', '#D2122E'),
 ('Torino', 'Italy', '#881F1E', '#FFFFFF'),
-('Udinese', 'Italy', '#000000', '#FFFFFF'),
+('Udinese Calcio', 'Italy', '#000000', '#FFFFFF'),
 ('Genoa', 'Italy', '#C8102E', '#002855'),
 -- Germany
 ('Bayern Munich', 'Germany', '#DC052D', '#FFFFFF'),

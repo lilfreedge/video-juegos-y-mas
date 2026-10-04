@@ -137,6 +137,11 @@ export default function CareerPage() {
 
       {showAdd && (
         <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded-lg p-4 mb-5">
+          {clubs.length === 0 && (
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-300 rounded text-sm text-amber-900">
+              ⚠️ <strong>Catálogo vacío.</strong> Corre la migración <code className="bg-amber-200 px-1 rounded">005_clubs_catalog.sql</code> en Supabase para cargar los ~90 clubes (incluyendo Haiti United).
+            </div>
+          )}
           <ClubPicker clubs={clubs} value={selectedClub} onChange={setSelectedClub} />
           <div className="grid gap-2 sm:grid-cols-4 mt-3">
             <select value={startMonth} onChange={(e) => setStartMonth(e.target.value ? Number(e.target.value) : '')} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-3 py-2 text-sm">
