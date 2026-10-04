@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import Loading from '../components/Loading';
 
 interface Tournament { id: string; name: string; country: string | null; logo_url: string | null; has_top_scorer: boolean; color: string | null; text_color: string | null; }
 interface Champion { id: string; tournament_id: string; team_name: string; team_country: string | null; team_color: string | null; team_text_color: string | null; wins: number; runners_up: number; years_won: string | null; years_runner_up: string | null; from_my_career: boolean; }
@@ -62,7 +63,7 @@ export default function TournamentDetailPage() {
   }
   async function delScorer(sid: string) { if (!confirm('Delete?')) return; await supabase.from('top_scorers').delete().eq('id', sid); load(); }
 
-  if (loading) return <div className="text-slate-500 text-sm py-10 text-center">Loading…</div>;
+  if (loading) return <Loading />;
   if (!t) return <div className="text-slate-500">Tournament not found.</div>;
 
   const ChampForm = (

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import Loading from '../components/Loading';
 
 interface Tournament {
   id: string;
@@ -103,7 +104,7 @@ export default function TournamentsPage() {
     await Promise.all(next.map((r, i) => supabase.from('tournaments').update({ sort_order: i + 1 }).eq('id', r.id)));
   }
 
-  if (loading) return <div className="text-slate-500 text-sm py-10 text-center">Loading…</div>;
+  if (loading) return <Loading />;
 
   const Form = (
     <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded-lg p-4 mb-4 grid gap-2 sm:grid-cols-2">
