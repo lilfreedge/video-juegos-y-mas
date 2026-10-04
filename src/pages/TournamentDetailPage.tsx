@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, BarChart3, Camera, Edit3, Pencil, Plus, Star, Target, Trash2, Trophy, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 import StandingsImport from '../components/StandingsImport';
@@ -10,10 +11,42 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
+// Highlight years that fall within user's career era (amber color)
+// yearStr format: "2010, 2011, 2016-17, 2022-23" — we check each year/season
+function HighlightYears({ yearsText, careerYears }: { yearsText: string | null; careerYears: Set<number> }) {
+  if (!yearsText) return <>—</>;
+  const parts = yearsText.split(',').map((p) => p.trim());
+  return (
+    <>{parts.map((p, i) => {
+      // Extract the end year from strings like "2026-27" or "2027" or "1992-93"
+      const m = p.match(/(\d{4})-?(\d{2,4})?/);
+      let endYear: number | null = null;
+      if (m) {
+        if (m[2]) {
+          const start = Number(m[1]);
+          const endTwo = m[2].length === 2 ? Number(m[2]) : Number(m[2]);
+          endYear = m[2].length === 2 ? (Math.floor(start / 100) * 100 + endTwo + (endTwo < start % 100 ? 100 : 0)) : endTwo;
+        } else {
+          endYear = Number(m[1]);
+        }
+      }
+      const isCareer = endYear !== null && careerYears.has(endYear);
+      return (
+        <span key={i}>
+          {isCareer ? (
+            <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 px-1.5 py-0.5 rounded font-semibold">{p} ★</span>
+          ) : p}
+          {i < parts.length - 1 ? ', ' : ''}
+        </span>
+      );
+    })}</>
+  );
+}
+
 interface Tournament { id: string; name: string; country: string | null; logo_url: string | null; has_top_scorer: boolean; color: string | null; text_color: string | null; }
 interface Champion { id: string; tournament_id: string; team_name: string; team_country: string | null; team_color: string | null; team_text_color: string | null; wins: number; runners_up: number; years_won: string | null; years_runner_up: string | null; from_my_career: boolean; }
 interface Scorer { id: string; tournament_id: string; year: number; player_name: string; nationality: string | null; team: string | null; goals: number; from_my_career: boolean; }
-interface Standing { id: string; tournament_id: string; year_end: number; team_name: string; position: number | null; played: number | null; wins: number | null; draws: number | null; losses: number | null; goals_for: number | null; goals_against: number | null; points: number | null; }
+interface Standing { id: string; tournament_id: string; year_end: number; team_name: string; position: number | null; played: number | null; wins: number | null; draws: number | null; losses: number | null; goals_for: number | null; goals_against: number | null; points: number | null; is_my_team: boolean; }
 
 export default function TournamentDetailPage() {
   const { id } = useParams();
@@ -22,6 +55,7 @@ export default function TournamentDetailPage() {
   const [scorers, setScorers] = useState<Scorer[]>([]);
   const [standings, setStandings] = useState<Standing[]>([]);
   const [catalog, setCatalog] = useState<string[]>([]);
+  const [careerYears, setCareerYears] = useState<Set<number>>(new Set());
   const [standingsYear, setStandingsYear] = useState<number>(new Date().getFullYear() + 1);
   const [showImport, setShowImport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -34,18 +68,20 @@ export default function TournamentDetailPage() {
   async function load() {
     if (!id) return;
     setLoading(true);
-    const [{ data: td }, { data: cd }, { data: sd }, { data: std }, { data: cat }] = await Promise.all([
+    const [{ data: td }, { data: cd }, { data: sd }, { data: std }, { data: cat }, { data: seas }] = await Promise.all([
       supabase.from('tournaments').select('*').eq('id', id).maybeSingle(),
       supabase.from('champions').select('*').eq('tournament_id', id).order('wins', { ascending: false }),
       supabase.from('top_scorers').select('*').eq('tournament_id', id).order('goals', { ascending: false }),
       supabase.from('standings').select('*').eq('tournament_id', id).order('year_end', { ascending: false }).order('position', { ascending: true }),
       supabase.from('clubs_catalog').select('name').order('name'),
+      supabase.from('seasons').select('end_year'),
     ]);
     setT(td as Tournament | null);
     setChamps((cd ?? []) as Champion[]);
     setScorers((sd ?? []) as Scorer[]);
     setStandings((std ?? []) as Standing[]);
     setCatalog(((cat ?? []) as { name: string }[]).map((c) => c.name));
+    setCareerYears(new Set(((seas ?? []) as { end_year: number }[]).map((s) => s.end_year)));
     setLoading(false);
   }
   useEffect(() => { load(); }, [id]);
@@ -127,7 +163,7 @@ export default function TournamentDetailPage() {
 
   return (
     <div>
-      <Link to="/" className="text-slate-500 hover:text-emerald-600 text-sm">← Tournaments</Link>
+      <Link to="/" className="text-slate-500 hover:text-emerald-600 text-sm inline-flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5" /> Tournaments</Link>
       <div className="mt-3 mb-6 rounded-xl p-5 flex items-center gap-4" style={{ background: t.color ?? '#1e3a8a', color: t.text_color ?? '#ffffff' }}>
         <div className="w-14 h-14 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
           {t.logo_url ? <img src={t.logo_url} alt="" className="w-full h-full object-contain p-1" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} /> : <span className="font-bold">{t.name.slice(0, 3).toUpperCase()}</span>}
@@ -137,8 +173,8 @@ export default function TournamentDetailPage() {
 
       <section className="mb-8">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-xs uppercase font-semibold text-slate-500">🏆 Champions</div>
-          <button onClick={openNewChamp} className="text-xs bg-emerald-600 text-white rounded px-3 py-1">+ Add team</button>
+          <div className="text-xs uppercase font-semibold text-slate-500 inline-flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5" /> Champions</div>
+          <button onClick={openNewChamp} className="text-xs bg-emerald-600 text-white rounded px-3 py-1 inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Add team</button>
         </div>
         {editingC === 'new' && ChampForm}
         <div className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden bg-white dark:bg-slate-900">
@@ -151,11 +187,11 @@ export default function TournamentDetailPage() {
                 <td className="px-3 py-2 font-bold uppercase" style={{ background: c.team_color ?? undefined, color: c.team_text_color ?? '#fff' }}>{c.team_name} {c.from_my_career && '⭐'}</td>
                 <td className="px-3 py-2 text-right font-semibold">{c.wins}</td>
                 <td className="px-3 py-2 text-right">{c.runners_up}</td>
-                <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 max-w-xs">{c.years_won || '—'}</td>
-                <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 max-w-xs">{c.years_runner_up || '—'}</td>
+                <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 max-w-xs"><HighlightYears yearsText={c.years_won} careerYears={careerYears} /></td>
+                <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-300 max-w-xs"><HighlightYears yearsText={c.years_runner_up} careerYears={careerYears} /></td>
                 <td className="px-3 py-2 opacity-0 group-hover:opacity-100 whitespace-nowrap text-right">
-                  <button onClick={() => openEditChamp(c)} className="text-slate-400 hover:text-emerald-500 text-sm mr-2">✎</button>
-                  <button onClick={() => delChamp(c.id)} className="text-slate-400 hover:text-red-500 text-sm">×</button>
+                  <button onClick={() => openEditChamp(c)} className="text-slate-400 hover:text-emerald-500 inline-block mr-2"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => delChamp(c.id)} className="text-slate-400 hover:text-red-500 inline-block"><X className="w-4 h-4" /></button>
                 </td>
               </tr>
             ))}</tbody>
@@ -166,7 +202,7 @@ export default function TournamentDetailPage() {
       {/* Standings */}
       <section className="mb-8">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-          <div className="text-xs uppercase font-semibold text-slate-500">📊 Standings por temporada</div>
+          <div className="text-xs uppercase font-semibold text-slate-500 inline-flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Standings por temporada</div>
           <div className="flex items-center gap-2">
             {availableYears.length > 0 && (
               <select value={standingsYear} onChange={(e) => setStandingsYear(Number(e.target.value))} className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs">
@@ -174,9 +210,9 @@ export default function TournamentDetailPage() {
               </select>
             )}
             <input type="number" value={standingsYear} onChange={(e) => setStandingsYear(Number(e.target.value))} placeholder="Año fin" className="w-24 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs" title="Año fin de temporada (ej: 2027 para 2026-27)" />
-            <button onClick={() => setShowEdit(true)} className="text-xs bg-emerald-600 text-white rounded px-3 py-1">✎ Editar manual</button>
-            <button onClick={() => setShowImport(true)} className="text-xs border border-slate-300 dark:border-slate-700 hover:border-emerald-400 rounded px-3 py-1" title="OCR aún no muy preciso para FIFA">📷 Foto</button>
-            {standingsForYear.length > 0 && <button onClick={delStandings} className="text-xs text-slate-400 hover:text-red-500 px-2">🗑</button>}
+            <button onClick={() => setShowEdit(true)} className="text-xs bg-emerald-600 text-white rounded px-3 py-1 inline-flex items-center gap-1"><Edit3 className="w-3 h-3" /> Editar manual</button>
+            <button onClick={() => setShowImport(true)} className="text-xs border border-slate-300 dark:border-slate-700 hover:border-emerald-400 rounded px-3 py-1 inline-flex items-center gap-1" title="OCR aún no muy preciso para FIFA"><Camera className="w-3 h-3" /> Foto</button>
+            {standingsForYear.length > 0 && <button onClick={delStandings} className="text-slate-400 hover:text-red-500 px-2"><Trash2 className="w-3.5 h-3.5" /></button>}
           </div>
         </div>
         {standingsForYear.length === 0 ? (
@@ -200,9 +236,13 @@ export default function TournamentDetailPage() {
                 </tr>
               </thead>
               <tbody>{standingsForYear.map((r) => (
-                <tr key={r.id} className={`border-t border-slate-100 dark:border-slate-800 ${r.position === 1 ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                <tr key={r.id} className={`border-t border-slate-100 dark:border-slate-800 ${r.is_my_team ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : r.position === 1 ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
                   <td className="px-3 py-1.5 font-mono text-slate-500">{r.position ?? ''}</td>
-                  <td className="px-3 py-1.5 font-medium">{r.team_name}{r.position === 1 && <span className="ml-2 text-amber-600 text-xs font-bold">🏆</span>}</td>
+                  <td className="px-3 py-1.5 font-medium">
+                    {r.team_name}
+                    {r.position === 1 && <Trophy className="ml-2 w-3.5 h-3.5 inline text-amber-600" />}
+                    {r.is_my_team && <span className="ml-2 text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> MI EQUIPO</span>}
+                  </td>
                   <td className="px-2 text-center">{r.played ?? '—'}</td>
                   <td className="px-2 text-center">{r.wins ?? '—'}</td>
                   <td className="px-2 text-center">{r.draws ?? '—'}</td>
@@ -234,8 +274,8 @@ export default function TournamentDetailPage() {
       {t.has_top_scorer && (
         <section>
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xs uppercase font-semibold text-slate-500">⚽ Top scorer in one season</div>
-            <button onClick={() => { setSForm({ year: new Date().getFullYear(), goals: 0 }); setEditingS('new'); }} className="text-xs bg-emerald-600 text-white rounded px-3 py-1">+ Add scorer</button>
+            <div className="text-xs uppercase font-semibold text-slate-500 inline-flex items-center gap-1.5"><Target className="w-3.5 h-3.5" /> Top scorer in one season</div>
+            <button onClick={() => { setSForm({ year: new Date().getFullYear(), goals: 0 }); setEditingS('new'); }} className="text-xs bg-emerald-600 text-white rounded px-3 py-1 inline-flex items-center gap-1"><Plus className="w-3 h-3" /> Add scorer</button>
           </div>
           {editingS === 'new' && (
             <div className="bg-white dark:bg-slate-900 border border-emerald-300 rounded p-3 mb-3 grid gap-2 sm:grid-cols-3">
@@ -252,14 +292,14 @@ export default function TournamentDetailPage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 text-xs uppercase"><tr><th className="w-10 px-3 py-2">#</th><th className="text-left px-3 py-2">Player</th><th className="text-right px-3 py-2">Goals</th><th className="text-left px-3 py-2">Nat</th><th className="text-left px-3 py-2">Season</th><th className="text-left px-3 py-2">Team</th><th className="w-10"></th></tr></thead>
               <tbody>{scorers.length === 0 ? <tr><td colSpan={7} className="text-center text-slate-400 py-6">No data yet.</td></tr> : scorers.map((s, i) => (
-                <tr key={s.id} className="group border-t border-slate-200 dark:border-slate-800">
+                <tr key={s.id} className={`group border-t border-slate-200 dark:border-slate-800 ${s.from_my_career ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : ''}`}>
                   <td className="px-3 py-2 text-slate-400 font-mono">{i + 1}</td>
                   <td className="px-3 py-2 font-medium">
                     {s.player_name}
                     {scorerAppearance[s.id] > 1 && (
                       <span className="ml-1 text-amber-600 text-xs font-semibold">({ordinal(scorerAppearance[s.id])} time)</span>
                     )}
-                    {s.from_my_career && ' ⭐'}
+                    {s.from_my_career && <span className="ml-2 text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> MI EQUIPO</span>}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold">{s.goals}</td>
                   <td className="px-3 py-2">{s.nationality ?? '—'}</td>

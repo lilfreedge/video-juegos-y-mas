@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowLeft, Archive, BarChart3, CheckCircle2, ChevronDown, ChevronUp, Flag, Plus, Trophy, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 
@@ -115,7 +116,7 @@ export default function CareerPage() {
           <div className="w-1.5" style={{ background: c.club_color ?? '#64748b' }} />
           <div className="flex-1 p-3 flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0" style={{ background: c.club_color ?? '#0f172a', color: c.club_text_color ?? '#ffffff' }}>
-              {c.is_national ? <span className="text-lg">🌐</span> : <span className="text-xs font-bold">{c.club_name.slice(0, 2).toUpperCase()}</span>}
+              {c.is_national ? <Flag className="w-5 h-5" /> : <span className="text-xs font-bold">{c.club_name.slice(0, 2).toUpperCase()}</span>}
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{c.club_name}</div>
@@ -126,9 +127,9 @@ export default function CareerPage() {
               </div>
             </div>
             {ct.filter((t) => t.result === 'winner').length > 0 && (
-              <span className="text-xs bg-amber-100 text-amber-800 rounded px-2 py-0.5 font-semibold">🏆 {ct.filter((t) => t.result === 'winner').length}</span>
+              <span className="text-xs bg-amber-100 text-amber-800 rounded px-2 py-0.5 font-semibold inline-flex items-center gap-1"><Trophy className="w-3 h-3" /> {ct.filter((t) => t.result === 'winner').length}</span>
             )}
-            <button onClick={(e) => { e.preventDefault(); delContract(c.id); }} className="text-slate-400 hover:text-red-500 text-sm">×</button>
+            <button onClick={(e) => { e.preventDefault(); delContract(c.id); }} className="text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
           </div>
         </div>
       </Link>
@@ -137,10 +138,10 @@ export default function CareerPage() {
 
   return (
     <div>
-      <Link to="/" className="text-slate-500 hover:text-emerald-600 text-sm">← Home</Link>
+      <Link to="/" className="text-slate-500 hover:text-emerald-600 text-sm inline-flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5" /> Home</Link>
       <div className="mt-3 mb-5 flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold">⚽ Career</h1>
-        <button onClick={() => setShowAdd((v) => !v)} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2 text-sm">+ Nuevo contract</button>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><Trophy className="w-6 h-6 text-emerald-600" /> Career</h1>
+        <button onClick={() => setShowAdd((v) => !v)} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2 text-sm inline-flex items-center gap-1"><Plus className="w-4 h-4" /> Nuevo contract</button>
       </div>
 
       {showAdd && (
@@ -151,8 +152,8 @@ export default function CareerPage() {
             </div>
           )}
           <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-3 text-sm">
-            <button onClick={() => { setAddMode('club'); setSelectedClub(null); }} className={`px-4 py-1.5 ${addMode === 'club' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}>⚽ Club</button>
-            <button onClick={() => { setAddMode('national'); setSelectedClub(null); }} className={`px-4 py-1.5 ${addMode === 'national' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}>🌐 Selección</button>
+            <button onClick={() => { setAddMode('club'); setSelectedClub(null); }} className={`px-4 py-1.5 inline-flex items-center gap-1.5 ${addMode === 'club' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}><Trophy className="w-4 h-4" /> Club</button>
+            <button onClick={() => { setAddMode('national'); setSelectedClub(null); }} className={`px-4 py-1.5 inline-flex items-center gap-1.5 ${addMode === 'national' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-500 hover:text-slate-800'}`}><Flag className="w-4 h-4" /> Selección</button>
           </div>
           <ClubPicker clubs={clubs.filter((c) => !!c.is_national === (addMode === 'national'))} value={selectedClub} onChange={setSelectedClub} isNational={addMode === 'national'} />
           <div className="grid gap-2 sm:grid-cols-4 mt-3">
@@ -175,11 +176,11 @@ export default function CareerPage() {
       {/* Stats toggle */}
       <button onClick={() => setShowStats((v) => !v)} className="w-full mb-3 flex items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-400 rounded-lg px-4 py-3 text-sm">
         <span className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-          <span>📊</span>
+          <BarChart3 className="w-4 h-4" />
           <span className="font-semibold">Stats</span>
-          <span className="text-slate-400 text-xs">· {contracts.filter((c) => !c.is_national).length} clubes · {seasons.length} seasons · {totalWinners} 🏆 · {activeClub?.club_name ?? '—'}</span>
+          <span className="text-slate-400 text-xs inline-flex items-center gap-1">· {contracts.filter((c) => !c.is_national).length} clubes · {seasons.length} seasons · {totalWinners} <Trophy className="w-3 h-3 inline" /> · {activeClub?.club_name ?? '—'}</span>
         </span>
-        <span className="text-slate-400">{showStats ? '▲' : '▼'}</span>
+        {showStats ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
       </button>
       {showStats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -201,10 +202,10 @@ export default function CareerPage() {
       {/* Trophy showcase */}
       {trophyList.length > 0 && (
         <section className="mb-6">
-          <div className="text-xs uppercase font-semibold text-slate-500 mb-2">🏆 Trophy showcase</div>
+          <div className="text-xs uppercase font-semibold text-slate-500 mb-2 inline-flex items-center gap-1.5"><Trophy className="w-3.5 h-3.5" /> Trophy showcase</div>
           <div className="grid gap-2">{trophyList.map(([name, { count, years }]) => (
             <div key={name} className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-3">
-              <span className="text-2xl">🏆</span>
+              <Trophy className="w-6 h-6 text-amber-500" />
               <div className="flex-1 min-w-0"><div className="font-medium">{name}</div><div className="text-xs text-slate-500">{[...years].sort().join(' · ')}</div></div>
               <span className="text-xl font-bold text-amber-700">×{count}</span>
             </div>
@@ -217,19 +218,19 @@ export default function CareerPage() {
         {/* CLUBES column */}
         <div>
           <div className="text-sm font-bold text-slate-800 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 pb-2 mb-3 flex items-center gap-2">
-            <span className="text-lg">⚽</span>
+            <Trophy className="w-4 h-4" />
             <span>Clubes</span>
             <span className="text-xs text-slate-400 font-normal ml-auto">{contracts.filter((c) => !c.is_national).length}</span>
           </div>
           {activeClubs.length > 0 && (
             <div className="mb-5">
-              <div className="text-[10px] uppercase font-semibold text-emerald-700 mb-2 flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Activos</div>
+              <div className="text-[10px] uppercase font-semibold text-emerald-700 mb-2 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Activos</div>
               <div className="grid gap-2">{activeClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
             </div>
           )}
           {previousClubs.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase font-semibold text-slate-500 mb-2">Anteriores</div>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 mb-2 flex items-center gap-1"><Archive className="w-3 h-3" /> Anteriores</div>
               <div className="grid gap-2">{previousClubs.map((c) => <ContractCard key={c.id} c={c} />)}</div>
             </div>
           )}
@@ -241,19 +242,19 @@ export default function CareerPage() {
         {/* SELECCIONES column */}
         <div>
           <div className="text-sm font-bold text-slate-800 dark:text-slate-100 border-b border-slate-200 dark:border-slate-700 pb-2 mb-3 flex items-center gap-2">
-            <span className="text-lg">🌐</span>
+            <Flag className="w-4 h-4" />
             <span>Selecciones</span>
             <span className="text-xs text-slate-400 font-normal ml-auto">{contracts.filter((c) => c.is_national).length}</span>
           </div>
           {activeNationals.length > 0 && (
             <div className="mb-5">
-              <div className="text-[10px] uppercase font-semibold text-emerald-700 mb-2 flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Activas</div>
+              <div className="text-[10px] uppercase font-semibold text-emerald-700 mb-2 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Activas</div>
               <div className="grid gap-2">{activeNationals.map((c) => <ContractCard key={c.id} c={c} />)}</div>
             </div>
           )}
           {previousNationals.length > 0 && (
             <div>
-              <div className="text-[10px] uppercase font-semibold text-slate-500 mb-2">Anteriores</div>
+              <div className="text-[10px] uppercase font-semibold text-slate-500 mb-2 flex items-center gap-1"><Archive className="w-3 h-3" /> Anteriores</div>
               <div className="grid gap-2">{previousNationals.map((c) => <ContractCard key={c.id} c={c} />)}</div>
             </div>
           )}

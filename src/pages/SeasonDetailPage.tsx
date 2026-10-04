@@ -203,7 +203,7 @@ function TransfersTab({ seasonId, transfers, players, onChange }: { seasonId: st
 
   const groups: Record<Transfer['type'], Transfer[]> = { in: [], out: [], loan_in: [], loan_out: [] };
   for (const tr of transfers) groups[tr.type].push(tr);
-  const titles: Record<Transfer['type'], string> = { in: '⬇️ IN', out: '⬆️ OUT', loan_in: '🔵 LOAN IN', loan_out: '🟠 LOAN OUT' };
+  const titles: Record<Transfer['type'], string> = { in: '↙ IN', out: '↗ OUT', loan_in: '← LOAN IN', loan_out: '→ LOAN OUT' };
 
   return (
     <div>
