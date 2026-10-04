@@ -198,6 +198,18 @@ export default function TournamentDetailPage() {
       </section>
 
       {showImport && id && <StandingsImport tournamentId={id} yearEnd={standingsYear} catalog={catalog} onClose={() => setShowImport(false)} onSaved={load} />}
+      {showEdit && id && (
+        <StandingsImport
+          tournamentId={id}
+          yearEnd={standingsYear}
+          catalog={catalog}
+          initialRows={standingsForYear.length > 0
+            ? standingsForYear.map((s) => ({ position: s.position, team: s.team_name, played: s.played, wins: s.wins, draws: s.draws, losses: s.losses, gf: s.goals_for, ga: s.goals_against, points: s.points }))
+            : []}
+          onClose={() => setShowEdit(false)}
+          onSaved={load}
+        />
+      )}
 
       {t.has_top_scorer && (
         <section>
