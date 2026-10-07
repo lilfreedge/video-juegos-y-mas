@@ -91,10 +91,11 @@ export default function StandingsImport({ tournamentId, yearEnd, catalog, initia
       if (error) throw error;
 
       // Auto-mirror: position 1 → champion, position 2 → runner-up (in champions table)
-      const winner = rows.find((r) => r.position === 1 && r.team);
-      const runnerUp = rows.find((r) => r.position === 2 && r.team);
-      if (winner) await upsertChampion(winner.team, 'won');
-      if (runnerUp) await upsertChampion(runnerUp.team, 'runner_up');
+      // Strict check: team must be non-empty trimmed string
+      const winner = rows.find((r) => r.position === 1 && r.team && r.team.trim().length > 0);
+      const runnerUp = rows.find((r) => r.position === 2 && r.team && r.team.trim().length > 0);
+      if (winner) await upsertChampion(winner.team.trim(), 'won');
+      if (runnerUp) await upsertChampion(runnerUp.team.trim(), 'runner_up');
 
       onSaved(); onClose();
     } catch (e: any) {

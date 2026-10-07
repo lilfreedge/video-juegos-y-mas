@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { CalendarClock } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -18,6 +19,15 @@ export default function HomePage() {
           </div>
           <div className="text-xl font-bold">Career</div>
           <div className="text-xs text-slate-500 mt-2">Tus clubes, trofeos y temporadas</div>
+        </Link>
+        <Link to="/season-summary" className="sm:col-span-2 group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-400 transition shadow-sm hover:shadow-lg p-6 text-center flex items-center justify-center gap-4">
+          <div className="w-16 h-16 flex items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30">
+            <CalendarClock className="w-9 h-9 text-emerald-600 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="text-left">
+            <div className="text-xl font-bold">Season Summary</div>
+            <div className="text-xs text-slate-500 mt-1">Cómo quedó la tabla cada año</div>
+          </div>
         </Link>
       </div>
     </div>

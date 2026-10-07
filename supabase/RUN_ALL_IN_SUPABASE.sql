@@ -1284,7 +1284,7 @@ insert into _aliases (alt, canonical) values
   ('OGC Nice', 'Nice'),
   ('Girondins Bordeaux', 'Bordeaux'),
   ('Girondins de Bordeaux', 'Bordeaux'),
-  ('Stade Rennais', 'Rennes'),
+  ('Rennes', 'Stade Rennais'),
   ('Stade de Reims', 'Reims'),
   -- Spain
   ('Barcelona', 'FC Barcelona'),
@@ -1384,6 +1384,7 @@ with family as (
   select
     c.id,
     c.tournament_id,
+    c.team_name,
     lower(trim(coalesce(a.canonical, c.team_name))) as canon_key,
     coalesce(c.wins, 0) + coalesce(c.runners_up, 0) as score
   from champions c
@@ -1392,7 +1393,11 @@ with family as (
 ranked as (
   select id, row_number() over (
     partition by tournament_id, canon_key
-    order by score desc, id asc
+    order by
+      -- prefer rows whose name already matches the canonical form
+      case when lower(trim(team_name)) = canon_key then 0 else 1 end,
+      score desc,
+      id asc
   ) as rn
   from family
 )
@@ -2232,4 +2237,185 @@ on conflict (tournament_id, team_name) do update set
                    then champions.runners_up + 1 else champions.runners_up end,
   years_runner_up = case when champions.years_runner_up is null then '2026'
                          when champions.years_runner_up !~ '\m2026\M' then champions.years_runner_up || ', 2026'
+                         else champions.years_runner_up end;
+-- 015: Sync — para todos los standings existentes:
+--   position = 1 → asegura que el equipo es campeón con ese año en years_won
+--   position = 2 → asegura que el equipo es runner-up con ese año en years_runner_up
+-- Idempotente: si el año ya está en years_won/years_runner_up, no toca nada.
+
+do $$
+declare
+  s record;
+  year_str text;
+  canonical text;
+begin
+  -- Mapa de alias club → canonical para que los nombres matcheen champions existentes
+  -- (ej: standings dice "Al-Hilal" pero champions podría tener "Al Hilal")
+  for s in
+    select tournament_id, year_end, team_name, position
+    from standings
+    where position in (1, 2)
+  loop
+    year_str := s.year_end::text;
+    canonical := trim(s.team_name);
+
+    if s.position = 1 then
+      insert into champions (tournament_id, team_name, wins, runners_up, years_won, years_runner_up)
+      values (s.tournament_id, canonical, 1, 0, year_str, null)
+      on conflict (tournament_id, team_name) do update set
+        wins = case
+          when champions.years_won is null or champions.years_won !~ ('\m' || year_str || '\M')
+          then champions.wins + 1
+          else champions.wins
+        end,
+        years_won = case
+          when champions.years_won is null then year_str
+          when champions.years_won !~ ('\m' || year_str || '\M') then champions.years_won || ', ' || year_str
+          else champions.years_won
+        end;
+    else
+      insert into champions (tournament_id, team_name, wins, runners_up, years_won, years_runner_up)
+      values (s.tournament_id, canonical, 0, 1, null, year_str)
+      on conflict (tournament_id, team_name) do update set
+        runners_up = case
+          when champions.years_runner_up is null or champions.years_runner_up !~ ('\m' || year_str || '\M')
+          then champions.runners_up + 1
+          else champions.runners_up
+        end,
+        years_runner_up = case
+          when champions.years_runner_up is null then year_str
+          when champions.years_runner_up !~ ('\m' || year_str || '\M') then champions.years_runner_up || ', ' || year_str
+          else champions.years_runner_up
+        end;
+    end if;
+  end loop;
+end $$;
+-- 016: Limpia rows con team_name vacío/whitespace en champions, standings y top_scorers
+-- Y agrega CHECK constraint para prevenir que pase de nuevo
+
+-- Clean up existing bad data
+delete from champions where team_name is null or trim(team_name) = '';
+delete from standings where team_name is null or trim(team_name) = '';
+delete from top_scorers where player_name is null or trim(player_name) = '';
+
+-- Add CHECK constraints (drop first if they exist to be idempotent)
+alter table champions drop constraint if exists champions_team_name_not_empty;
+alter table champions add constraint champions_team_name_not_empty check (length(trim(team_name)) > 0);
+
+alter table standings drop constraint if exists standings_team_name_not_empty;
+alter table standings add constraint standings_team_name_not_empty check (length(trim(team_name)) > 0);
+
+alter table top_scorers drop constraint if exists top_scorers_player_name_not_empty;
+alter table top_scorers add constraint top_scorers_player_name_not_empty check (length(trim(player_name)) > 0);
+
+-- Re-sync standings to champions in case any Al-Hilal/Al-Ittihad etc. were lost
+do $$
+declare
+  s record;
+  year_str text;
+  canonical text;
+begin
+  for s in
+    select tournament_id, year_end, team_name, position
+    from standings
+    where position in (1, 2) and team_name is not null and trim(team_name) <> ''
+  loop
+    year_str := s.year_end::text;
+    canonical := trim(s.team_name);
+
+    if s.position = 1 then
+      insert into champions (tournament_id, team_name, wins, runners_up, years_won, years_runner_up)
+      values (s.tournament_id, canonical, 1, 0, year_str, null)
+      on conflict (tournament_id, team_name) do update set
+        wins = case when champions.years_won is null or champions.years_won !~ ('\m' || year_str || '\M')
+                    then champions.wins + 1 else champions.wins end,
+        years_won = case when champions.years_won is null then year_str
+                         when champions.years_won !~ ('\m' || year_str || '\M') then champions.years_won || ', ' || year_str
+                         else champions.years_won end;
+    else
+      insert into champions (tournament_id, team_name, wins, runners_up, years_won, years_runner_up)
+      values (s.tournament_id, canonical, 0, 1, null, year_str)
+      on conflict (tournament_id, team_name) do update set
+        runners_up = case when champions.years_runner_up is null or champions.years_runner_up !~ ('\m' || year_str || '\M')
+                          then champions.runners_up + 1 else champions.runners_up end,
+        years_runner_up = case when champions.years_runner_up is null then year_str
+                               when champions.years_runner_up !~ ('\m' || year_str || '\M') then champions.years_runner_up || ', ' || year_str
+                               else champions.years_runner_up end;
+    end if;
+  end loop;
+end $$;
+-- 017: UEFA Super Cup — mover al tope de International + 2026 PSG venció Aston Villa + 2027 Crystal Palace venció Barcelona
+
+-- Mover sort_order para que aparezca junto a UCL/UEL/UECL
+update tournaments
+set sort_order = 4
+where name = 'UEFA Super Cup';
+
+-- Insertarlo si no existe
+insert into tournaments (name, country, has_top_scorer, color, text_color, sort_order)
+select 'UEFA Super Cup', null, false, '#1e3a8a', '#ffffff', 4
+where not exists (select 1 from tournaments where name = 'UEFA Super Cup');
+
+-- 2026 Super Cup: PSG venció a Aston Villa (ya estaba en migración 014, por si no se corrió)
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'Paris Saint-Germain', 'France', '#004170', '#ED1C24', 1, 0, '2026', null
+from tournaments t where t.name = 'UEFA Super Cup'
+on conflict (tournament_id, team_name) do update set
+  wins = case when champions.years_won is null or champions.years_won !~ '\m2026\M'
+              then champions.wins + 1 else champions.wins end,
+  years_won = case when champions.years_won is null then '2026'
+                   when champions.years_won !~ '\m2026\M' then champions.years_won || ', 2026'
+                   else champions.years_won end;
+
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'Aston Villa', 'England', '#670E36', '#95BFE5', 0, 1, null, '2026'
+from tournaments t where t.name = 'UEFA Super Cup'
+on conflict (tournament_id, team_name) do update set
+  runners_up = case when champions.years_runner_up is null or champions.years_runner_up !~ '\m2026\M'
+                    then champions.runners_up + 1 else champions.runners_up end,
+  years_runner_up = case when champions.years_runner_up is null then '2026'
+                         when champions.years_runner_up !~ '\m2026\M' then champions.years_runner_up || ', 2026'
+                         else champions.years_runner_up end;
+
+-- 2027 Super Cup: Crystal Palace venció a Barcelona (campeones UEL vs UCL del 2026-27)
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'Crystal Palace', 'England', '#1B458F', '#C4122E', 1, 0, '2027', null
+from tournaments t where t.name = 'UEFA Super Cup'
+on conflict (tournament_id, team_name) do update set
+  wins = case when champions.years_won is null or champions.years_won !~ '\m2027\M'
+              then champions.wins + 1 else champions.wins end,
+  years_won = case when champions.years_won is null then '2027'
+                   when champions.years_won !~ '\m2027\M' then champions.years_won || ', 2027'
+                   else champions.years_won end;
+
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'FC Barcelona', 'Spain', '#A50044', '#EDBB00', 0, 1, null, '2027'
+from tournaments t where t.name = 'UEFA Super Cup'
+on conflict (tournament_id, team_name) do update set
+  runners_up = case when champions.years_runner_up is null or champions.years_runner_up !~ '\m2027\M'
+                    then champions.runners_up + 1 else champions.runners_up end,
+  years_runner_up = case when champions.years_runner_up is null then '2027'
+                         when champions.years_runner_up !~ '\m2027\M' then champions.years_runner_up || ', 2027'
+                         else champions.years_runner_up end;
+-- 018: Season 2027-28 data (user's current season, incremental)
+
+-- UEFA Champions League 2027-28: Barcelona venció a Bayer Leverkusen
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'FC Barcelona', 'Spain', '#A50044', '#EDBB00', 1, 0, '2028', null
+from tournaments t where t.name = 'UEFA Champions League'
+on conflict (tournament_id, team_name) do update set
+  wins = case when champions.years_won is null or champions.years_won !~ '\m2028\M'
+              then champions.wins + 1 else champions.wins end,
+  years_won = case when champions.years_won is null then '2028'
+                   when champions.years_won !~ '\m2028\M' then champions.years_won || ', 2028'
+                   else champions.years_won end;
+
+insert into champions (tournament_id, team_name, team_country, team_color, team_text_color, wins, runners_up, years_won, years_runner_up)
+select t.id, 'Bayer Leverkusen', 'Germany', '#E32221', '#000000', 0, 1, null, '2028'
+from tournaments t where t.name = 'UEFA Champions League'
+on conflict (tournament_id, team_name) do update set
+  runners_up = case when champions.years_runner_up is null or champions.years_runner_up !~ '\m2028\M'
+                    then champions.runners_up + 1 else champions.runners_up end,
+  years_runner_up = case when champions.years_runner_up is null then '2028'
+                         when champions.years_runner_up !~ '\m2028\M' then champions.years_runner_up || ', 2028'
                          else champions.years_runner_up end;

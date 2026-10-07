@@ -43,7 +43,7 @@ function HighlightYears({ yearsText, careerYears }: { yearsText: string | null; 
   );
 }
 
-interface Tournament { id: string; name: string; country: string | null; logo_url: string | null; has_top_scorer: boolean; color: string | null; text_color: string | null; }
+interface Tournament { id: string; name: string; country: string | null; logo_url: string | null; has_top_scorer: boolean; color: string | null; text_color: string | null; division: number | null; }
 interface Champion { id: string; tournament_id: string; team_name: string; team_country: string | null; team_color: string | null; team_text_color: string | null; wins: number; runners_up: number; years_won: string | null; years_runner_up: string | null; from_my_career: boolean; }
 interface Scorer { id: string; tournament_id: string; year: number; player_name: string; nationality: string | null; team: string | null; goals: number; from_my_career: boolean; }
 interface Standing { id: string; tournament_id: string; year_end: number; team_name: string; position: number | null; played: number | null; wins: number | null; draws: number | null; losses: number | null; goals_for: number | null; goals_against: number | null; points: number | null; is_my_team: boolean; }
@@ -57,6 +57,7 @@ export default function TournamentDetailPage() {
   const [catalog, setCatalog] = useState<string[]>([]);
   const [careerYears, setCareerYears] = useState<Set<number>>(new Set());
   const [standingsYear, setStandingsYear] = useState<number>(new Date().getFullYear() + 1);
+  const [standingsYearInput, setStandingsYearInput] = useState<string>('');
   const [showImport, setShowImport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,17 @@ export default function TournamentDetailPage() {
 
   const availableYears = useMemo(() => Array.from(new Set(standings.map((s) => s.year_end))).sort((a, b) => b - a), [standings]);
   useEffect(() => { if (availableYears.length && !availableYears.includes(standingsYear)) setStandingsYear(availableYears[0]); }, [availableYears]);
+  // Sync the text input with the current standingsYear (format "2026-27")
+  useEffect(() => { setStandingsYearInput(`${standingsYear - 1}-${String(standingsYear).slice(-2)}`); }, [standingsYear]);
+  function commitYearInput() {
+    const m = standingsYearInput.match(/(\d{4})/);
+    if (m) {
+      const start = Number(m[1]);
+      setStandingsYear(start + 1);
+    } else {
+      setStandingsYearInput(`${standingsYear - 1}-${String(standingsYear).slice(-2)}`);
+    }
+  }
   const standingsForYear = useMemo(() => standings.filter((s) => s.year_end === standingsYear).sort((a, b) => (a.position ?? 999) - (b.position ?? 999)), [standings, standingsYear]);
 
   async function delStandings() {
@@ -199,7 +211,8 @@ export default function TournamentDetailPage() {
         </div>
       </section>
 
-      {/* Standings */}
+      {/* Standings — only for domestic leagues (tournaments with a division) */}
+      {t.division != null && (
       <section className="mb-8">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <div className="text-xs uppercase font-semibold text-slate-500 inline-flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Standings por temporada</div>
@@ -209,7 +222,16 @@ export default function TournamentDetailPage() {
                 {availableYears.map((y) => <option key={y} value={y}>{y - 1}-{String(y).slice(-2)}</option>)}
               </select>
             )}
-            <input type="number" value={standingsYear} onChange={(e) => setStandingsYear(Number(e.target.value))} placeholder="Año fin" className="w-24 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs" title="Año fin de temporada (ej: 2027 para 2026-27)" />
+            <input
+              type="text"
+              value={standingsYearInput}
+              onChange={(e) => setStandingsYearInput(e.target.value)}
+              onBlur={commitYearInput}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              placeholder="2026-27"
+              className="w-20 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-2 py-1 text-xs"
+              title="Temporada (ej: 2026-27)"
+            />
             <button onClick={() => setShowEdit(true)} className="text-xs bg-emerald-600 text-white rounded px-3 py-1 inline-flex items-center gap-1"><Edit3 className="w-3 h-3" /> Editar manual</button>
             <button onClick={() => setShowImport(true)} className="text-xs border border-slate-300 dark:border-slate-700 hover:border-emerald-400 rounded px-3 py-1 inline-flex items-center gap-1" title="OCR aún no muy preciso para FIFA"><Camera className="w-3 h-3" /> Foto</button>
             {standingsForYear.length > 0 && <button onClick={delStandings} className="text-slate-400 hover:text-red-500 px-2"><Trash2 className="w-3.5 h-3.5" /></button>}
@@ -236,12 +258,12 @@ export default function TournamentDetailPage() {
                 </tr>
               </thead>
               <tbody>{standingsForYear.map((r) => (
-                <tr key={r.id} className={`border-t border-slate-100 dark:border-slate-800 ${r.is_my_team ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : r.position === 1 ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                <tr key={r.id} className={`border-t border-slate-100 dark:border-slate-800 ${r.is_my_team ? 'bg-amber-50/60 dark:bg-amber-900/15' : r.position === 1 ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
                   <td className="px-3 py-1.5 font-mono text-slate-500">{r.position ?? ''}</td>
-                  <td className="px-3 py-1.5 font-medium">
+                  <td className={`px-3 py-1.5 ${r.is_my_team ? 'font-semibold' : 'font-medium'}`}>
                     {r.team_name}
                     {r.position === 1 && <Trophy className="ml-2 w-3.5 h-3.5 inline text-amber-600" />}
-                    {r.is_my_team && <span className="ml-2 text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> MI EQUIPO</span>}
+                    {r.is_my_team && <Star className="ml-1.5 w-3 h-3 inline text-amber-500" />}
                   </td>
                   <td className="px-2 text-center">{r.played ?? '—'}</td>
                   <td className="px-2 text-center">{r.wins ?? '—'}</td>
@@ -256,6 +278,7 @@ export default function TournamentDetailPage() {
           </div>
         )}
       </section>
+      )}
 
       {showImport && id && <StandingsImport tournamentId={id} yearEnd={standingsYear} catalog={catalog} onClose={() => setShowImport(false)} onSaved={load} />}
       {showEdit && id && (
@@ -292,14 +315,14 @@ export default function TournamentDetailPage() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 text-xs uppercase"><tr><th className="w-10 px-3 py-2">#</th><th className="text-left px-3 py-2">Player</th><th className="text-right px-3 py-2">Goals</th><th className="text-left px-3 py-2">Nat</th><th className="text-left px-3 py-2">Season</th><th className="text-left px-3 py-2">Team</th><th className="w-10"></th></tr></thead>
               <tbody>{scorers.length === 0 ? <tr><td colSpan={7} className="text-center text-slate-400 py-6">No data yet.</td></tr> : scorers.map((s, i) => (
-                <tr key={s.id} className={`group border-t border-slate-200 dark:border-slate-800 ${s.from_my_career ? 'bg-amber-100 dark:bg-amber-900/40 font-semibold' : ''}`}>
+                <tr key={s.id} className={`group border-t border-slate-200 dark:border-slate-800 ${s.from_my_career ? 'bg-amber-50/60 dark:bg-amber-900/15' : ''}`}>
                   <td className="px-3 py-2 text-slate-400 font-mono">{i + 1}</td>
-                  <td className="px-3 py-2 font-medium">
+                  <td className={`px-3 py-2 ${s.from_my_career ? 'font-semibold' : 'font-medium'}`}>
                     {s.player_name}
                     {scorerAppearance[s.id] > 1 && (
                       <span className="ml-1 text-amber-600 text-xs font-semibold">({ordinal(scorerAppearance[s.id])} time)</span>
                     )}
-                    {s.from_my_career && <span className="ml-2 text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"><Star className="w-2.5 h-2.5" /> MI EQUIPO</span>}
+                    {s.from_my_career && <Star className="ml-1.5 w-3 h-3 inline text-amber-500" />}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold">{s.goals}</td>
                   <td className="px-3 py-2">{s.nationality ?? '—'}</td>

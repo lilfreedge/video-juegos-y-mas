@@ -29,7 +29,7 @@ insert into _aliases (alt, canonical) values
   ('OGC Nice', 'Nice'),
   ('Girondins Bordeaux', 'Bordeaux'),
   ('Girondins de Bordeaux', 'Bordeaux'),
-  ('Stade Rennais', 'Rennes'),
+  ('Rennes', 'Stade Rennais'),
   ('Stade de Reims', 'Reims'),
   -- Spain
   ('Barcelona', 'FC Barcelona'),
@@ -129,6 +129,7 @@ with family as (
   select
     c.id,
     c.tournament_id,
+    c.team_name,
     lower(trim(coalesce(a.canonical, c.team_name))) as canon_key,
     coalesce(c.wins, 0) + coalesce(c.runners_up, 0) as score
   from champions c
@@ -137,7 +138,11 @@ with family as (
 ranked as (
   select id, row_number() over (
     partition by tournament_id, canon_key
-    order by score desc, id asc
+    order by
+      -- prefer rows whose name already matches the canonical form
+      case when lower(trim(team_name)) = canon_key then 0 else 1 end,
+      score desc,
+      id asc
   ) as rn
   from family
 )

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, BarChart3, Plus, Star, Trophy as TrophyIcon, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 
 interface Season { id: string; contract_id: string; label: string; start_year: number; end_year: number; }
-interface Contract { id: string; club_name: string; club_color: string | null; club_text_color: string | null; club_logo_url: string | null; }
+interface Contract { id: string; club_name: string; club_country: string | null; club_color: string | null; club_text_color: string | null; club_logo_url: string | null; is_national: boolean; }
 interface Player { id: string; season_id: string; jersey: number | null; position: string | null; name: string; age: number | null; overall: number | null; nationality: string | null; status: 'squad' | 'new_signing' | 'loan_in' | 'loan_out' | 'sold'; }
 interface Transfer { id: string; season_id: string; type: 'in' | 'out' | 'loan_in' | 'loan_out'; player_name: string; from_club: string | null; to_club: string | null; amount: string | null; month: number | null; squad_player_id: string | null; }
 interface Tournament { id: string; name: string; country: string | null; division: number | null; }
 interface Trophy { id: string; season_id: string; tournament_id: string | null; tournament_name_snapshot: string; result: string; }
+interface Standing { id: string; tournament_id: string; year_end: number; team_name: string; position: number | null; played: number | null; wins: number | null; draws: number | null; losses: number | null; goals_for: number | null; goals_against: number | null; points: number | null; is_my_team: boolean; }
 
 const STATUS_BADGE: Record<Player['status'], { label: string; className: string }> = {
   squad: { label: '', className: '' },
@@ -19,8 +21,8 @@ const STATUS_BADGE: Record<Player['status'], { label: string; className: string 
 };
 
 const RESULTS = [
-  ['winner', '🏆 Winner'],
-  ['runner_up', '🥈 Runner-up'],
+  ['winner', 'Winner'],
+  ['runner_up', 'Runner-up'],
   ['semifinal', 'Semifinal'],
   ['quarterfinal', 'Quarterfinal'],
   ['r16', 'R16'],
@@ -30,13 +32,14 @@ const RESULTS = [
 
 export default function SeasonDetailPage() {
   const { id } = useParams();
-  const [tab, setTab] = useState<'squad' | 'transfers' | 'trophies'>('squad');
+  const [tab, setTab] = useState<'squad' | 'transfers' | 'resumen'>('resumen');
   const [season, setSeason] = useState<Season | null>(null);
   const [contract, setContract] = useState<Contract | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [trophies, setTrophies] = useState<Trophy[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [standings, setStandings] = useState<Standing[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -49,13 +52,25 @@ export default function SeasonDetailPage() {
       supabase.from('squad_players').select('*').eq('season_id', id).order('jersey', { ascending: true, nullsFirst: false }),
       supabase.from('transfers').select('*').eq('season_id', id).order('month', { ascending: true, nullsFirst: true }),
       supabase.from('trophies_won').select('*').eq('season_id', id),
-      supabase.from('tournaments').select('id,name,country,division').order('display_order', { ascending: true }),
+      supabase.from('tournaments').select('id,name,country,division'),
     ]);
     setContract(c as Contract | null);
     setPlayers((pl ?? []) as Player[]);
     setTransfers((tr ?? []) as Transfer[]);
     setTrophies((tw ?? []) as Trophy[]);
     setTournaments((ts ?? []) as Tournament[]);
+
+    // Load standings for the D1 of the contract's country for the season's end year
+    if (se && c) {
+      const contractData = c as Contract;
+      const d1 = ((ts ?? []) as Tournament[]).find((t) => t.country === contractData.club_country && t.division === 1);
+      if (d1) {
+        const { data: std } = await supabase.from('standings').select('*').eq('tournament_id', d1.id).eq('year_end', se.end_year).order('position', { ascending: true });
+        setStandings((std ?? []) as Standing[]);
+      } else {
+        setStandings([]);
+      }
+    }
     setLoading(false);
   }
   useEffect(() => { load(); }, [id]);
@@ -63,24 +78,27 @@ export default function SeasonDetailPage() {
   if (loading) return <Loading />;
   if (!season) return <div className="text-slate-500">Season not found.</div>;
 
+  // Find primary league tournament (D1 of contract's country)
+  const primaryLeague = tournaments.find((t) => t.country === contract?.club_country && t.division === 1);
+
   return (
     <div>
-      <Link to={`/career/contract/${season.contract_id}`} className="text-slate-500 hover:text-emerald-600 text-sm">← {contract?.club_name ?? 'Contract'}</Link>
+      <Link to={`/career/contract/${season.contract_id}`} className="text-slate-500 hover:text-emerald-600 text-sm inline-flex items-center gap-1"><ArrowLeft className="w-3.5 h-3.5" /> {contract?.club_name ?? 'Contract'}</Link>
       <div className="mt-3 mb-4">
         <h1 className="text-2xl font-bold">{season.label}</h1>
       </div>
 
       <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800 mb-4">
-        {(['squad', 'transfers', 'trophies'] as const).map((t) => (
+        {(['resumen', 'squad', 'transfers'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-semibold capitalize border-b-2 transition ${tab === t ? 'border-emerald-500 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            {t} {t === 'squad' ? `(${players.length})` : t === 'transfers' ? `(${transfers.length})` : `(${trophies.length})`}
+            {t === 'resumen' ? `Resumen (${trophies.length})` : t === 'squad' ? `Squad (${players.length})` : `Transfers (${transfers.length})`}
           </button>
         ))}
       </div>
 
       {tab === 'squad' && <SquadTab seasonId={season.id} players={players} onChange={load} />}
       {tab === 'transfers' && <TransfersTab seasonId={season.id} transfers={transfers} players={players} onChange={load} />}
-      {tab === 'trophies' && <TrophiesTab seasonId={season.id} trophies={trophies} tournaments={tournaments} onChange={load} />}
+      {tab === 'resumen' && <ResumenTab seasonId={season.id} trophies={trophies} tournaments={tournaments} standings={standings} primaryLeague={primaryLeague ?? null} contract={contract} onChange={load} />}
     </div>
   );
 }

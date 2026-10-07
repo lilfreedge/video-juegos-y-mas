@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 
@@ -15,6 +16,30 @@ interface Tournament {
   division: number | null;
 }
 
+// Extract latest END year from a years_won / years_runner_up string
+// Handles "2024-25" (→ 2025), "2024" (→ 2024), comma-separated lists
+function latestYear(yearsText: string | null): number | null {
+  if (!yearsText) return null;
+  let max = 0;
+  const re = /(\d{4})(?:-(\d{2,4}))?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(yearsText)) !== null) {
+    const start = Number(m[1]);
+    let end = start;
+    if (m[2]) {
+      if (m[2].length === 2) {
+        const twoDigit = Number(m[2]);
+        end = Math.floor(start / 100) * 100 + twoDigit;
+        if (end < start) end += 100;
+      } else {
+        end = Number(m[2]);
+      }
+    }
+    if (end > max) max = end;
+  }
+  return max > 0 ? max : null;
+}
+
 const COUNTRY_FLAG: Record<string, string> = {
   France: '🇫🇷', Spain: '🇪🇸', England: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', Italy: '🇮🇹', Germany: '🇩🇪',
   Netherlands: '🇳🇱', Portugal: '🇵🇹', Belgium: '🇧🇪', Scotland: '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
@@ -23,6 +48,7 @@ const INTL_LABEL = '🌍 International';
 
 export default function TournamentsPage() {
   const [rows, setRows] = useState<Tournament[]>([]);
+  const [latestByTournament, setLatestByTournament] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -33,13 +59,29 @@ export default function TournamentsPage() {
   async function load() {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('tournaments').select('*').order('sort_order', { ascending: true }).order('division', { ascending: true });
-      if (error) throw error;
-      setRows((data ?? []) as Tournament[]);
+      const [{ data: toursRows, error: toursErr }, { data: champs }] = await Promise.all([
+        supabase.from('tournaments').select('*').order('sort_order', { ascending: true }).order('division', { ascending: true }),
+        supabase.from('champions').select('tournament_id, years_won'),
+      ]);
+      if (toursErr) throw toursErr;
+      setRows((toursRows ?? []) as Tournament[]);
+      // For each tournament, compute the latest year any team has won (end year)
+      const latest: Record<string, number> = {};
+      for (const c of ((champs ?? []) as { tournament_id: string; years_won: string | null }[])) {
+        const y = latestYear(c.years_won);
+        if (y !== null && (latest[c.tournament_id] ?? 0) < y) latest[c.tournament_id] = y;
+      }
+      setLatestByTournament(latest);
     } catch (e: any) { setErr(e.message ?? String(e)); }
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
+
+  // Global max year across ALL tournaments — the "current era" the user is tracking
+  const globalMaxYear = useMemo(() => {
+    const vals = Object.values(latestByTournament);
+    return vals.length > 0 ? Math.max(...vals) : 0;
+  }, [latestByTournament]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Tournament[]>();
@@ -154,6 +196,11 @@ export default function TournamentsPage() {
                         <div className="font-medium truncate flex items-center gap-2">
                           {t.name}
                           {t.division && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 rounded px-1.5 py-0.5">D{t.division}</span>}
+                          {globalMaxYear > 0 && (latestByTournament[t.id] ?? 0) < globalMaxYear && (
+                            <span title={`Falta campeón ${globalMaxYear - 1}-${String(globalMaxYear).slice(-2)}`} className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 rounded px-1.5 py-0.5">
+                              <AlertCircle className="w-3 h-3" /> {globalMaxYear - 1}-{String(globalMaxYear).slice(-2)}
+                            </span>
+                          )}
                         </div>
                         {t.has_top_scorer && <div className="text-[10px] text-emerald-700">⚽ scorers</div>}
                       </div>
