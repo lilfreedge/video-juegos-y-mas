@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, BarChart3, Plus, Star, Trophy as TrophyIcon, X } from 'lucide-react';
+import { ArrowLeft, BarChart3 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import Loading from '../components/Loading';
 
@@ -60,6 +60,7 @@ export default function SeasonDetailPage() {
     setTrophies((tw ?? []) as Trophy[]);
     setTournaments((ts ?? []) as Tournament[]);
 
+    setStandings([]);
     // Load standings for the D1 of the contract's country for the season's end year
     if (se && c) {
       const contractData = c as Contract;
@@ -256,6 +257,52 @@ function TransfersTab({ seasonId, transfers, players, onChange }: { seasonId: st
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ResumenTab({ seasonId, trophies, tournaments, standings, primaryLeague, contract, onChange }: {
+  seasonId: string;
+  trophies: Trophy[];
+  tournaments: Tournament[];
+  standings: Standing[];
+  primaryLeague: Tournament | null;
+  contract: Contract | null;
+  onChange: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <TrophiesTab seasonId={seasonId} trophies={trophies} tournaments={tournaments} onChange={onChange} />
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+        <h2 className="flex items-center gap-2 p-3 font-semibold">
+          <BarChart3 className="w-4 h-4" /> {primaryLeague?.name ?? 'League standings'}
+        </h2>
+        {standings.length === 0 ? (
+          <p className="p-4 pt-0 text-sm text-slate-500">No standings recorded for this season.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">{primaryLeague?.name ?? 'League'} standings</caption>
+              <thead className="bg-slate-100 dark:bg-slate-800 text-xs uppercase text-slate-500">
+                <tr>{['Pos', 'Team', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts'].map((label) => <th key={label} scope="col" className={`p-2 ${label === 'Team' ? 'text-left' : 'text-center'}`}>{label}</th>)}</tr>
+              </thead>
+              <tbody>{standings.map((team) => {
+                const isMyTeam = contract?.club_name
+                  ? team.team_name.trim().toLowerCase() === contract.club_name.trim().toLowerCase()
+                  : team.is_my_team;
+                const goalDifference = team.goals_for !== null && team.goals_against !== null ? team.goals_for - team.goals_against : '—';
+                return (
+                  <tr key={team.id} className={`border-t border-slate-100 dark:border-slate-800 ${isMyTeam ? 'bg-emerald-50 dark:bg-emerald-950 font-semibold' : ''}`}>
+                    <td className="p-2 text-center">{team.position ?? '—'}</td>
+                    <th scope="row" className="p-2 text-left font-medium whitespace-nowrap">{team.team_name}</th>
+                    {[team.played, team.wins, team.draws, team.losses, team.goals_for, team.goals_against, goalDifference, team.points].map((value, index) => <td key={index} className="p-2 text-center">{value ?? '—'}</td>)}
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
